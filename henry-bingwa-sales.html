@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingwa Data Sales Services - Automated Safaricom Offers</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #009688;
+            --secondary-color: #FF9800;
+            --dark-color: #333;
+            --light-color: #f8f9fa;
+            --success-color: #4CAF50;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: var(--dark-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            background: linear-gradient(to right, var(--primary-color), #00796b);
+            color: white;
+            padding: 1.5rem 0;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .logo i {
+            font-size: 2.5rem;
+            margin-right: 10px;
+        }
+        
+        .logo h1 {
+            font-size: 1.8rem;
+        }
+        
+        .tagline {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .highlight {
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+        
+        /* Main content */
+        main {
+            padding: 2rem 0;
+        }
+        
+        .section {
+            background-color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        
+        .section-title {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title i {
+            margin-right: 10px;
+        }
+        
+        /* Offers Section */
+        .offers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .offer-card {
+            background: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
+            border-left: 5px solid var(--success-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .offer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        
+        .offer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+        
+        .data-size {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .price {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .offer-details {
+            color: #666;
+            margin-bottom: 0.8rem;
+        }
+        
+        .offer-details i {
+            color: var(--success-color);
+            margin-right: 5px;
+        }
+        
+        /* Instructions */
+        .instructions ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .instructions li {
+            margin-bottom: 0.8rem;
+            padding-left: 0.5rem;
+        }
+        
+        .till-number {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            margin: 0.5rem 0;
+        }
+        
+        /* Notes */
+        .notes-list {
+            list-style-type: none;
+        }
+        
+        .notes-list li {
+            margin-bottom: 1rem;
+            padding-left: 1.8rem;
+            position: relative;
+        }
+        
+        .notes-list li:before {
+            content: "📌";
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Contact */
+        .contact-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .contact-card {
+            flex: 1;
+            min-width: 250px;
+            background-color: #f8f9fa;
+            padding: 1.2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .contact-card i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 0.8rem;
+        }
+        
+        .phone-number {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+        
+        /* Form */
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: #00796b;
+        }
+        
+        .btn-block {
+            width: 100%;
+        }
+        
+        /* Footer */
+        footer {
+            background-color: var(--dark-color);
+            color: white;
+            text-align: center;
+            padding: 1.5rem 0;
+            margin-top: 2rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .offers-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .contact-info {
+                flex-direction: column;
+            }
+            
+            .logo h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-bolt"></i>
+                <h1>Bingwa Data Sales Services</h1>
+            </div>
+            <p class="tagline">Stay updated throughout the day with Automated Bingwa sokoni Safaricom offers <span class="highlight">hata ukiwa na okoa jahazi</span> 🔥</p>
+        </div>
+    </header>
+    
+    <main class="container">
+        <!-- Offers Section -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-gift"></i> Today's Best Offers</h2>
+            <div class="offers-grid">
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div class="data-size">1.25 GB</div>
+                        <div class="price">KSh 55</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> Valid till midnight
+                    </div>
+                    <p><strong>Best Value!</strong> Perfect for all-day browsing</p>
+                </div>
+                
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div class="data-size">250 MB</div>
+                        <div class="price">KSh 20</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> Valid 24 hours
+                    </div>
+                    <p>Great for light browsing and social media</p>
+                </div>
+                
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div class="data-size">1.5 GB</div>
+                        <div class="price">KSh 49</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> Valid 3 hours
+                    </div>
+                    <p>High-speed data for short, intensive use</p>
+                </div>
+                
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div class="data-size">1 GB</div>
+                        <div class="price">KSh 19</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> Valid 1 hour
+                    </div>
+                    <p>Quick emergency data for urgent needs</p>
+                </div>
+                
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div class="data-size">1 GB</div>
+                        <div class="price">KSh 99</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> Valid 24 hours
+                    </div>
+                    <p>Full day access with reliable connectivity</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Purchase Instructions -->
+        <section class="section instructions">
+            <h2 class="section-title"><i class="fas fa-shopping-cart"></i> How to Purchase</h2>
+            <ol>
+                <li>Go to <strong>Lipa na M-Pesa</strong> on your phone</li>
+                <li>Select <strong>Buy Goods & Services</strong></li>
+                <li>Enter Till Number: <div class="till-number">4864614</div></li>
+                <li>Enter the <strong>exact amount</strong> of the package you want to purchase</li>
+                <li>Confirm the payment with your M-PESA PIN</li>
+            </ol>
+            
+            <div class="section">
+                <h3 class="section-title"><i class="fas fa-info-circle"></i> Important Notes</h3>
+                <ul class="notes-list">
+                    <li>Data will be loaded automatically to the number making payment</li>
+                    <li>Purchase once a day per line only</li>
+                    <li>Offers are subject to availability and may change</li>
+                    <li>Ensure you have sufficient balance before making payment</li>
+                </ul>
+            </div>
+        </section>
+        
+        <!-- Buy for Another Number Form -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-mobile-alt"></i> Buy for Another Number</h2>
+            <p>You can also purchase data bundles for another Safaricom number using the form below:</p>
+            
+            <form id="purchaseForm" style="margin-top: 1.5rem;">
+                <div class="form-group">
+                    <label for="package">Select Package:</label>
+                    <select id="package" class="form-control" required>
+                        <option value="">-- Choose a data package --</option>
+                        <option value="55">1.25 GB - KSh 55 (Valid till midnight)</option>
+                        <option value="20">250 MB - KSh 20 (Valid 24 hrs)</option>
+                        <option value="49">1.5 GB - KSh 49 (Valid 3 hrs)</option>
+                        <option value="19">1 GB - KSh 19 (Valid 1 hr)</option>
+                        <option value="99">1 GB - KSh 99 (Valid 24 hrs)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phoneNumber">Recipient Phone Number:</label>
+                    <input type="tel" id="phoneNumber" class="form-control" placeholder="07XX XXX XXX" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="yourNumber">Your Phone Number (for receipt):</label>
+                    <input type="tel" id="yourNumber" class="form-control" placeholder="07XX XXX XXX" required>
+                </div>
+                
+                <button type="submit" class="btn btn-block">Proceed to Payment Instructions</button>
+            </form>
+            
+            <div id="instructions" style="display: none; margin-top: 1.5rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px;">
+                <h3>Payment Instructions</h3>
+                <p>To complete your purchase for <span id="recipientNumber"></span>:</p>
+                <ol>
+                    <li>Go to <strong>Lipa na M-Pesa</strong></li>
+                    <li>Select <strong>Buy Goods & Services</strong></li>
+                    <li>Enter Till Number: <strong>4864614</strong></li>
+                    <li>Enter Amount: KSh <span id="packageAmount"></span></li>
+                    <li>Confirm with your M-PESA PIN</li>
+                </ol>
+                <p>Once payment is received, data will be loaded to <span id="recipientNumber2"></span> within a few minutes.</p>
+            </div>
+        </section>
+        
+        <!-- Contact Section -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-headset"></i> Customer Support</h2>
+            <p>For any delays, issues with data loading, or customer care services:</p>
+            
+            <div class="contact-info">
+                <div class="contact-card">
+                    <i class="fas fa-phone-alt"></i>
+                    <h3>Reverse Call</h3>
+                    <p class="phone-number">0718 257 264</p>
+                    <p>Call this number for immediate assistance</p>
+                </div>
+                
+                <div class="contact-card">
+                    <i class="fas fa-clock"></i>
+                    <h3>Service Hours</h3>
+                    <p>7:00 AM - 10:00 PM</p>
+                    <p>Daily support including weekends</p>
+                </div>
+                
+                <div class="contact-card">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Issues & Delays</h3>
+                    <p>Have your M-PESA transaction code ready when contacting support</p>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; <span id="currentYear"></span> Bingwa Data Sales Services. All rights reserved.</p>
+            <p>Automated Safaricom offers delivered straight to your phone</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">This is an independent service for Safaricom customers</p>
+        </div>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        
+        // Handle form submission
+        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const packageSelect = document.getElementById('package');
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const packageAmount = packageSelect.value;
+            const packageText = packageSelect.options[packageSelect.selectedIndex].text;
+            
+            if (!packageAmount || !phoneNumber) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Update instructions
+            document.getElementById('recipientNumber').textContent = phoneNumber;
+            document.getElementById('recipientNumber2').textContent = phoneNumber;
+            document.getElementById('packageAmount').textContent = packageAmount;
+            
+            // Show instructions
+            document.getElementById('instructions').style.display = 'block';
+            
+            // Scroll to instructions
+            document.getElementById('instructions').scrollIntoView({ behavior: 'smooth' });
+            
+            // Optional: You could also submit this data to a server here
+            console.log('Purchase request:', {
+                package: packageText,
+                amount: packageAmount,
+                recipient: phoneNumber,
+                purchaser: document.getElementById('yourNumber').value
+            });
+        });
+        
+        // Add some interactivity to offer cards
+        document.querySelectorAll('.offer-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const dataSize = this.querySelector('.data-size').textContent;
+                const price = this.querySelector('.price').textContent;
+                
+                // Auto-select the package in the form
+                const packageSelect = document.getElementById('package');
+                for (let option of packageSelect.options) {
+                    if (option.text.includes(dataSize) && option.text.includes(price.replace('KSh ', ''))) {
+                        packageSelect.value = option.value;
+                        break;
+                    }
+                }
+                
+                // Scroll to form
+                document.getElementById('purchaseForm').scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    </script>
+</body>
+</html>
