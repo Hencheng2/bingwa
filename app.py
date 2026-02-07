@@ -40,19 +40,18 @@ class Config:
         # Running on Render.com
         RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
         if RENDER_EXTERNAL_HOSTNAME:
-            LIPANA_CALLBACK_URL = f"https://https://bingwa.onrender.com/api/payment-callback/api/payment-callback"
+            LIPANA_CALLBACK_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}/api/payment-callback"
         else:
             # Fallback for Render
-            RENDER_SERVICE_NAME = os.environ.get('RENDER_SERVICE_NAME', 'bingwa')
-            LIPANA_CALLBACK_URL = f"https://https://bingwa.onrender.com/api/payment-callback.onrender.com/api/payment-callback"
+            LIPANA_CALLBACK_URL = "https://bingwa.onrender.com/api/payment-callback"
     else:
         # Local development
         LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
     
-    # Database configuration for Render
+    # Database configuration for Render - FIXED
     if 'RENDER' in os.environ:
-        # Render provides persistent disk at /var/data
-        DATABASE_PATH = '/var/data/bingwa.db'
+        # Use current directory for database
+        DATABASE_PATH = os.path.join(os.getcwd(), 'bingwa.db')
     else:
         # Local development
         DATABASE_PATH = os.path.join(app.instance_path, 'bingwa.db')
@@ -69,12 +68,6 @@ class Config:
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
 
-# Ensure database directory exists
-if 'RENDER' in os.environ:
-    os.makedirs('/var/data', exist_ok=True)
-else:
-    os.makedirs(app.instance_path, exist_ok=True)
-
 # Database setup
 def get_db():
     """Get database connection"""
@@ -84,6 +77,7 @@ def get_db():
 
 def init_db():
     """Initialize database with tables"""
+    logger.info(f"Initializing database at: {app.config['DATABASE_PATH']}")
     conn = get_db()
     cursor = conn.cursor()
     
@@ -770,9 +764,6 @@ def health_check():
     })
 
 if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    
     # Display startup information
     print("=" * 60)
     print("BINGWA DATA SALES SYSTEM")
@@ -791,4 +782,3 @@ if __name__ == '__main__':
         port=port,
         debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     )
-
