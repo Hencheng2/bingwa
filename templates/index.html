@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingwa Data Sales - Instant Data Bundles via M-PESA</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* All the CSS styles from previous version remain the same */
+        :root {
+            --primary-color: #009688;
+            --secondary-color: #FF9800;
+            --dark-color: #333;
+            --light-color: #f8f9fa;
+            --success-color: #4CAF50;
+            --danger-color: #f44336;
+            --info-color: #2196F3;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: var(--dark-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            background: linear-gradient(to right, var(--primary-color), #00796b);
+            color: white;
+            padding: 1.5rem 0;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .logo i {
+            font-size: 2.5rem;
+            margin-right: 10px;
+        }
+        
+        .logo h1 {
+            font-size: 1.8rem;
+        }
+        
+        .tagline {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .highlight {
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+        
+        /* Main content */
+        main {
+            padding: 2rem 0;
+        }
+        
+        .section {
+            background-color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        
+        .section-title {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title i {
+            margin-right: 10px;
+        }
+        
+        /* Offers Section */
+        .offers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .offer-card {
+            background: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
+            border-left: 5px solid var(--success-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .offer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        
+        .offer-card.selected {
+            border-left: 5px solid var(--secondary-color);
+            background: linear-gradient(to bottom right, #fff8e1, #ffecb3);
+        }
+        
+        .offer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+        }
+        
+        .data-size {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .price {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        
+        .offer-details {
+            color: #666;
+            margin-bottom: 0.8rem;
+        }
+        
+        .offer-details i {
+            color: var(--success-color);
+            margin-right: 5px;
+        }
+        
+        /* Payment Form */
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0,150,136,0.2);
+        }
+        
+        .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: #00796b;
+        }
+        
+        .btn-block {
+            width: 100%;
+        }
+        
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-success {
+            background-color: var(--success-color);
+        }
+        
+        .btn-success:hover {
+            background-color: #388e3c;
+        }
+        
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+        
+        .btn-danger:hover {
+            background-color: #d32f2f;
+        }
+        
+        .btn-info {
+            background-color: var(--info-color);
+        }
+        
+        .btn-info:hover {
+            background-color: #1976d2;
+        }
+        
+        /* Status Messages */
+        .status-box {
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+            display: none;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status-processing {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        /* Payment Steps */
+        .payment-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 2rem 0;
+            position: relative;
+        }
+        
+        .payment-steps:before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 10%;
+            width: 80%;
+            height: 2px;
+            background-color: #ddd;
+            z-index: 1;
+        }
+        
+        .step {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+        
+        .step-circle {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #ddd;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: bold;
+        }
+        
+        .step.active .step-circle {
+            background-color: var(--primary-color);
+        }
+        
+        .step.completed .step-circle {
+            background-color: var(--success-color);
+        }
+        
+        .step-text {
+            font-size: 0.9rem;
+        }
+        
+        /* Manual Payment Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .close-modal {
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+        
+        .close-modal:hover {
+            color: var(--dark-color);
+        }
+        
+        /* Footer */
+        footer {
+            background-color: var(--dark-color);
+            color: white;
+            text-align: center;
+            padding: 1.5rem 0;
+            margin-top: 2rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .offers-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .logo h1 {
+                font-size: 1.5rem;
+            }
+            
+            .payment-steps {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            
+            .payment-steps:before {
+                display: none;
+            }
+            
+            .modal-content {
+                margin: 5% auto;
+                width: 95%;
+            }
+        }
+        
+        /* Additional styles for better UI */
+        .contact-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .contact-card {
+            flex: 1;
+            min-width: 250px;
+            background-color: #f8f9fa;
+            padding: 1.2rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .contact-card i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 0.8rem;
+        }
+        
+        .phone-number {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+        
+        .notes-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .notes-list li {
+            margin-bottom: 0.8rem;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+        
+        .notes-list li:before {
+            content: "📌";
+            position: absolute;
+            left: 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .loading i {
+            font-size: 2rem;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-bolt"></i>
+                <h1>Bingwa Data Sales Services</h1>
+            </div>
+            <p class="tagline">Stay updated throughout the day with Automated Bingwa sokoni Safaricom offers <span class="highlight">hata ukiwa na okoa jahazi</span> 🔥</p>
+        </div>
+    </header>
+    
+    <main class="container">
+        <!-- Payment Steps -->
+        <div class="payment-steps">
+            <div class="step active" id="step1">
+                <div class="step-circle">1</div>
+                <div class="step-text">Select Package</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-circle">2</div>
+                <div class="step-text">Enter Details</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-circle">3</div>
+                <div class="step-text">Confirm & Pay</div>
+            </div>
+            <div class="step" id="step4">
+                <div class="step-circle">4</div>
+                <div class="step-text">Receive Data</div>
+            </div>
+        </div>
+        
+        <!-- Offers Section -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-gift"></i> Today's Best Offers</h2>
+            <p style="margin-bottom: 1.5rem;">Click on any package to select it:</p>
+            <div class="offers-grid" id="offersGrid">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading data packages...</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Payment Form -->
+        <section class="section" id="paymentSection">
+            <h2 class="section-title"><i class="fas fa-mobile-alt"></i> Complete Your Purchase</h2>
+            
+            <div id="selectedPackage" class="status-box status-info" style="display: none;">
+                <strong><i class="fas fa-shopping-cart"></i> Selected Package:</strong> <span id="packageDetails"></span>
+            </div>
+            
+            <form id="paymentForm">
+                <div class="form-group">
+                    <label for="phone"><i class="fas fa-phone"></i> Your Safaricom Phone Number:</label>
+                    <input type="tel" id="phone" class="form-control" placeholder="07XX XXX XXX" required>
+                    <small>Enter the Safaricom number that will receive the STK Push payment request</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="recipientPhone"><i class="fas fa-user-check"></i> Recipient Phone Number (for data):</label>
+                    <input type="tel" id="recipientPhone" class="form-control" placeholder="07XX XXX XXX (same as above if for you)" required>
+                    <small>If buying for someone else, enter their Safaricom number here</small>
+                </div>
+                
+                <button type="submit" class="btn btn-success btn-block" id="payButton">
+                    <i class="fas fa-paper-plane"></i> Send STK Push Payment Request
+                </button>
+                
+                <div style="text-align: center; margin: 1rem 0;">
+                    <button type="button" class="btn btn-info" id="manualPaymentBtn">
+                        <i class="fas fa-hand-point-right"></i> Pay Manually via Till 4864614
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Status Messages -->
+            <div id="statusMessage" class="status-box" style="display: none;"></div>
+            
+            <!-- Payment Details -->
+            <div id="paymentDetails" class="status-box status-info" style="display: none;">
+                <h4><i class="fas fa-info-circle"></i> Payment Initiated</h4>
+                <p><strong>Transaction ID:</strong> <span id="transactionId"></span></p>
+                <p><i class="fas fa-mobile-alt"></i> Check your phone (<span id="paymentPhone"></span>) and enter your M-PESA PIN</p>
+                <p><strong>Status:</strong> <span id="paymentStatus" class="status-processing">Pending...</span></p>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn btn-info" id="checkStatusBtn">
+                        <i class="fas fa-sync-alt"></i> Check Status
+                    </button>
+                    <button class="btn btn-danger" id="cancelPaymentBtn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- How It Works -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-play-circle"></i> How STK Push Works</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+                <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid var(--primary-color);">
+                    <div style="font-size: 2.5rem; color: var(--primary-color); margin-bottom: 1rem;">1</div>
+                    <h3 style="color: var(--primary-color);">Select</h3>
+                    <p>Choose your preferred data bundle</p>
+                </div>
+                <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid var(--info-color);">
+                    <div style="font-size: 2.5rem; color: var(--info-color); margin-bottom: 1rem;">2</div>
+                    <h3 style="color: var(--info-color);">Enter</h3>
+                    <p>Provide your Safaricom phone number</p>
+                </div>
+                <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid var(--secondary-color);">
+                    <div style="font-size: 2.5rem; color: var(--secondary-color); margin-bottom: 1rem;">3</div>
+                    <h3 style="color: var(--secondary-color);">Pay</h3>
+                    <p>Receive STK Push & enter M-PESA PIN</p>
+                </div>
+                <div style="text-align: center; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid var(--success-color);">
+                    <div style="font-size: 2.5rem; color: var(--success-color); margin-bottom: 1rem;">4</div>
+                    <h3 style="color: var(--success-color);">Enjoy</h3>
+                    <p>Data loaded automatically within minutes</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Important Notes -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-exclamation-circle"></i> Important Notes</h2>
+            <ul class="notes-list">
+                <li><strong>Daily Limit:</strong> Purchase once a day per line only</li>
+                <li><strong>Automatic Delivery:</strong> Data loads automatically to the number making payment</li>
+                <li><strong>For Another Number:</strong> Enter recipient's number in the second field</li>
+                <li><strong>STK Push:</strong> Keep your phone nearby to enter PIN when request arrives</li>
+                <li><strong>Support:</strong> For any delays or issues, reverse call <strong>0718 257 264</strong></li>
+                <li><strong>Manual Payment:</strong> Use Till <strong>4864614</strong> if STK Push fails</li>
+            </ul>
+        </section>
+        
+        <!-- Contact Section -->
+        <section class="section">
+            <h2 class="section-title"><i class="fas fa-headset"></i> Customer Support</h2>
+            <div class="contact-info">
+                <div class="contact-card">
+                    <i class="fas fa-phone-alt"></i>
+                    <h3>Reverse Call</h3>
+                    <p class="phone-number">0718 257 264</p>
+                    <p>For payment issues & immediate support</p>
+                </div>
+                
+                <div class="contact-card">
+                    <i class="fas fa-clock"></i>
+                    <h3>Service Hours</h3>
+                    <p>7:00 AM - 10:00 PM</p>
+                    <p>7 days a week including holidays</p>
+                </div>
+                
+                <div class="contact-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Secure Payment</h3>
+                    <p>Powered by LipaNa.Dev</p>
+                    <p>M-PESA verified & secure</p>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Manual Payment Modal -->
+    <div id="manualPaymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-hand-holding-usd"></i> Manual Payment</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            
+            <p>If STK Push isn't working, you can pay manually via M-PESA:</p>
+            
+            <div id="manualPaymentInstructions" style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin: 1.5rem 0;">
+                <h3><i class="fas fa-list-ol"></i> Payment Instructions</h3>
+                <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li>Go to <strong>Lipa na M-PESA</strong> on your phone</li>
+                    <li>Select <strong>Buy Goods & Services</strong></li>
+                    <li>Enter Till Number: <strong style="color: var(--primary-color);">4864614</strong></li>
+                    <li>Enter Amount: <strong id="modalAmount" style="color: var(--success-color);">KSh 0</strong></li>
+                    <li>Enter your M-PESA PIN to complete</li>
+                </ol>
+            </div>
+            
+            <form id="manualPaymentForm">
+                <div class="form-group">
+                    <label for="manualPhone"><i class="fas fa-phone"></i> Your Phone Number:</label>
+                    <input type="tel" id="manualPhone" class="form-control" placeholder="07XX XXX XXX" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="manualMpesaCode"><i class="fas fa-receipt"></i> M-PESA Transaction Code:</label>
+                    <input type="text" id="manualMpesaCode" class="form-control" placeholder="e.g., QGH56HJ90L" required>
+                    <small>Enter the transaction code from your M-PESA confirmation message</small>
+                </div>
+                
+                <button type="submit" class="btn btn-success btn-block">
+                    <i class="fas fa-check-circle"></i> Submit Manual Payment
+                </button>
+            </form>
+            
+            <div id="manualPaymentStatus" class="status-box" style="display: none; margin-top: 1rem;"></div>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; <span id="currentYear"></span> Bingwa Data Sales Services. All rights reserved.</p>
+            <p><i class="fas fa-bolt"></i> Instant STK Push Payments powered by LipaNa.Dev API</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">Till Number: 4864614 | Support: 0718 257 264</p>
+        </div>
+    </footer>
+
+    <script>
+        // Set current year in footer
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        
+        // Global variables
+        let selectedPackage = null;
+        let currentTransaction = null;
+        let statusCheckInterval = null;
+        
+        // Load packages on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPackages();
+        });
+        
+        // Load packages from backend
+        async function loadPackages() {
+            try {
+                const response = await fetch('/api/packages');
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderPackages(data.packages);
+                    if (data.packages.length > 0) {
+                        selectPackage(data.packages[0]);
+                    }
+                } else {
+                    showMessage('Failed to load packages. Please refresh the page.', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading packages:', error);
+                showMessage('Network error. Please check your connection.', 'error');
+            }
+        }
+        
+        // Render packages
+        function renderPackages(packages) {
+            const offersGrid = document.getElementById('offersGrid');
+            offersGrid.innerHTML = '';
+            
+            packages.forEach(pkg => {
+                const card = document.createElement('div');
+                card.className = 'offer-card';
+                card.dataset.id = pkg.id;
+                card.dataset.size = pkg.size;
+                card.dataset.price = pkg.price;
+                card.dataset.validity = pkg.validity;
+                
+                // Determine best value tag
+                let bestValueTag = '';
+                if (pkg.size === '1.25 GB' && pkg.price === 55) {
+                    bestValueTag = '<span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; margin-left: 5px;">BEST VALUE 🔥</span>';
+                }
+                
+                card.innerHTML = `
+                    <div class="offer-header">
+                        <div class="data-size">${pkg.size} ${bestValueTag}</div>
+                        <div class="price">KSh ${pkg.price}</div>
+                    </div>
+                    <div class="offer-details">
+                        <i class="fas fa-check-circle"></i> ${pkg.description}
+                    </div>
+                    <p><i class="fas fa-bolt" style="color: #FF9800;"></i> Instant delivery after payment</p>
+                `;
+                
+                card.addEventListener('click', () => selectPackage(pkg));
+                offersGrid.appendChild(card);
+            });
+        }
+        
+        // Select a package
+        function selectPackage(pkg) {
+            // Remove selected class from all cards
+            document.querySelectorAll('.offer-card').forEach(c => {
+                c.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked card
+            const card = document.querySelector(`.offer-card[data-id="${pkg.id}"]`);
+            if (card) {
+                card.classList.add('selected');
+            }
+            
+            // Store selected package
+            selectedPackage = pkg;
+            
+            // Show selected package info
+            const packageDetails = document.getElementById('packageDetails');
+            packageDetails.textContent = `${pkg.size} for KSh ${pkg.price} (${pkg.description})`;
+            document.getElementById('selectedPackage').style.display = 'block';
+            
+            // Update modal amount
+            document.getElementById('modalAmount').textContent = `KSh ${pkg.price}`;
+            
+            // Update steps
+            updateSteps(2);
+        }
+        
+        // Update payment steps
+        function updateSteps(activeStep) {
+            for (let i = 1; i <= 4; i++) {
+                const step = document.getElementById(`step${i}`);
+                if (i < activeStep) {
+                    step.classList.remove('active');
+                    step.classList.add('completed');
+                } else if (i === activeStep) {
+                    step.classList.add('active');
+                    step.classList.remove('completed');
+                } else {
+                    step.classList.remove('active');
+                    step.classList.remove('completed');
+                }
+            }
+        }
+        
+        // Show message
+        function showMessage(message, type) {
+            const statusBox = document.getElementById('statusMessage');
+            statusBox.textContent = message;
+            statusBox.className = `status-box status-${type}`;
+            statusBox.style.display = 'block';
+            
+            // Scroll to message
+            statusBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            // Auto-hide success messages after 10 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusBox.style.display = 'none';
+                }, 10000);
+            }
+        }
+        
+        // Handle STK Push payment
+        document.getElementById('paymentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedPackage) {
+                showMessage('Please select a data package first', 'error');
+                return;
+            }
+            
+            const phone = document.getElementById('phone').value.trim();
+            const recipientPhone = document.getElementById('recipientPhone').value.trim();
+            
+            if (!phone || !recipientPhone) {
+                showMessage('Please enter both phone numbers', 'error');
+                return;
+            }
+            
+            // Validate phone format
+            const phoneRegex = /^(07\d{8}|2547\d{8}|\+2547\d{8})$/;
+            const cleanPhone = phone.replace(/\D/g, '');
+            const cleanRecipientPhone = recipientPhone.replace(/\D/g, '');
+            
+            if (!phoneRegex.test('0' + cleanPhone.slice(-9)) && !phoneRegex.test('254' + cleanPhone.slice(-9))) {
+                showMessage('Please enter a valid Safaricom phone number (format: 07XXXXXXXX)', 'error');
+                return;
+            }
+            
+            // Update steps
+            updateSteps(3);
+            
+            // Show processing message
+            showMessage('Sending payment request to your phone... Please wait.', 'processing');
+            
+            // Disable button
+            const payButton = document.getElementById('payButton');
+            payButton.disabled = true;
+            payButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            
+            try {
+                const response = await fetch('/api/initiate-payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone: phone,
+                        package_id: selectedPackage.id,
+                        recipient_phone: recipientPhone
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store transaction info
+                    currentTransaction = {
+                        transaction_id: data.transaction_id,
+                        checkout_request_id: data.checkout_request_id,
+                        phone: phone
+                    };
+                    
+                    // Show success message
+                    showMessage('✅ ' + data.message, 'success');
+                    
+                    // Show payment details
+                    document.getElementById('transactionId').textContent = data.transaction_id;
+                    document.getElementById('paymentPhone').textContent = phone;
+                    document.getElementById('paymentDetails').style.display = 'block';
+                    
+                    // Start checking payment status
+                    startStatusChecking(data.checkout_request_id);
+                    
+                    updateSteps(4);
+                } else {
+                    showMessage('❌ ' + data.message, 'error');
+                    updateSteps(2);
+                }
+                
+            } catch (error) {
+                console.error('Payment error:', error);
+                showMessage('❌ Network error. Please try again or use manual payment.', 'error');
+                updateSteps(2);
+            } finally {
+                // Re-enable button after 5 seconds
+                setTimeout(() => {
+                    payButton.disabled = false;
+                    payButton.innerHTML = '<i class="fas fa-paper-plane"></i> Send STK Push Payment Request';
+                }, 5000);
+            }
+        });
+        
+        // Start checking payment status
+        function startStatusChecking(checkoutRequestId) {
+            // Clear any existing interval
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            // Check immediately
+            checkPaymentStatus(checkoutRequestId);
+            
+            // Then check every 10 seconds for 5 minutes
+            let checks = 0;
+            const maxChecks = 30; // 5 minutes (30 * 10 seconds)
+            
+            statusCheckInterval = setInterval(() => {
+                checkPaymentStatus(checkoutRequestId);
+                checks++;
+                
+                if (checks >= maxChecks) {
+                    clearInterval(statusCheckInterval);
+                    showMessage('Payment checking timeout. Please contact support if payment was successful.', 'info');
+                }
+            }, 10000);
+        }
+        
+        // Check payment status
+        async function checkPaymentStatus(checkoutRequestId) {
+            try {
+                const response = await fetch('/api/check-payment-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        checkout_request_id: checkoutRequestId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const status = data.transaction.status;
+                    const statusElement = document.getElementById('paymentStatus');
+                    
+                    // Update status text and color
+                    statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                    
+                    if (status === 'completed') {
+                        statusElement.className = 'status-success';
+                        
+                        // Payment completed
+                        showMessage(`✅ Payment successful! ${selectedPackage.size} data bundle has been loaded to ${data.transaction.recipient}. Enjoy!`, 'success');
+                        
+                        // Clear status checking
+                        if (statusCheckInterval) {
+                            clearInterval(statusCheckInterval);
+                            statusCheckInterval = null;
+                        }
+                        
+                        // Update UI
+                        document.getElementById('checkStatusBtn').disabled = true;
+                        document.getElementById('checkStatusBtn').innerHTML = '<i class="fas fa-check"></i> Payment Completed';
+                        document.getElementById('cancelPaymentBtn').style.display = 'none';
+                        
+                    } else if (status === 'failed') {
+                        statusElement.className = 'status-error';
+                        showMessage('❌ Payment failed. Please try again or use manual payment.', 'error');
+                        
+                        if (statusCheckInterval) {
+                            clearInterval(statusCheckInterval);
+                            statusCheckInterval = null;
+                        }
+                    } else if (status === 'pending') {
+                        statusElement.className = 'status-processing';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        }
+        
+        // Manual payment button
+        document.getElementById('manualPaymentBtn').addEventListener('click', function() {
+            if (!selectedPackage) {
+                showMessage('Please select a package first', 'error');
+                return;
+            }
+            
+            // Pre-fill phone if available
+            const phone = document.getElementById('phone').value;
+            if (phone) {
+                document.getElementById('manualPhone').value = phone;
+            }
+            
+            // Show modal
+            document.getElementById('manualPaymentModal').style.display = 'block';
+        });
+        
+        // Manual payment form
+        document.getElementById('manualPaymentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const phone = document.getElementById('manualPhone').value.trim();
+            const mpesaCode = document.getElementById('manualMpesaCode').value.trim();
+            
+            if (!selectedPackage || !phone || !mpesaCode) {
+                showMessageInModal('Please fill all fields', 'error');
+                return;
+            }
+            
+            // Validate phone
+            const phoneRegex = /^(07\d{8}|2547\d{8}|\+2547\d{8})$/;
+            const cleanPhone = phone.replace(/\D/g, '');
+            
+            if (!phoneRegex.test('0' + cleanPhone.slice(-9)) && !phoneRegex.test('254' + cleanPhone.slice(-9))) {
+                showMessageInModal('Please enter a valid Safaricom phone number', 'error');
+                return;
+            }
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            
+            try {
+                const response = await fetch('/api/manual-payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone: phone,
+                        package_id: selectedPackage.id,
+                        mpesa_code: mpesaCode,
+                        recipient_phone: document.getElementById('recipientPhone').value || phone
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessageInModal('✅ ' + data.message + ' ' + data.instructions, 'success');
+                    document.getElementById('manualPaymentForm').reset();
+                    
+                    // Close modal after 5 seconds
+                    setTimeout(() => {
+                        closeManualPaymentModal();
+                    }, 5000);
+                } else {
+                    showMessageInModal('❌ ' + data.message, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Manual payment error:', error);
+                showMessageInModal('❌ Network error. Please try again.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Submit Manual Payment';
+            }
+        });
+        
+        // Check status button
+        document.getElementById('checkStatusBtn').addEventListener('click', function() {
+            if (currentTransaction && currentTransaction.checkout_request_id) {
+                checkPaymentStatus(currentTransaction.checkout_request_id);
+                showMessage('Checking payment status...', 'info');
+            }
+        });
+        
+        // Cancel payment button
+        document.getElementById('cancelPaymentBtn').addEventListener('click', function() {
+            document.getElementById('paymentDetails').style.display = 'none';
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+            showMessage('Payment check cancelled. You can try again if needed.', 'info');
+        });
+        
+        // Modal close functionality
+        const modal = document.getElementById('manualPaymentModal');
+        const closeBtn = document.querySelector('.close-modal');
+        
+        closeBtn.onclick = closeManualPaymentModal;
+        
+        window.onclick = function(event) {
+            if (event.target === modal) {
+                closeManualPaymentModal();
+            }
+        };
+        
+        function closeManualPaymentModal() {
+            modal.style.display = 'none';
+            document.getElementById('manualPaymentStatus').style.display = 'none';
+            document.getElementById('manualPaymentForm').reset();
+        }
+        
+        // Show message in modal
+        function showMessageInModal(message, type) {
+            const statusBox = document.getElementById('manualPaymentStatus');
+            statusBox.textContent = message;
+            statusBox.className = `status-box status-${type}`;
+            statusBox.style.display = 'block';
+        }
+        
+        // Auto-fill recipient phone
+        document.getElementById('phone').addEventListener('blur', function() {
+            const recipientPhone = document.getElementById('recipientPhone');
+            if (!recipientPhone.value.trim()) {
+                recipientPhone.value = this.value;
+            }
+        });
+        
+        // Validate and format phone numbers
+        document.getElementById('phone').addEventListener('input', function() {
+            let phone = this.value.replace(/\D/g, '');
+            if (phone.length === 9 && phone.startsWith('7')) {
+                this.value = `0${phone}`;
+            } else if (phone.length === 12 && phone.startsWith('254')) {
+                this.value = `0${phone.slice(3)}`;
+            }
+        });
+        
+        document.getElementById('recipientPhone').addEventListener('input', function() {
+            let phone = this.value.replace(/\D/g, '');
+            if (phone.length === 9 && phone.startsWith('7')) {
+                this.value = `0${phone}`;
+            } else if (phone.length === 12 && phone.startsWith('254')) {
+                this.value = `0${phone.slice(3)}`;
+            }
+        });
+        
+        // Test LipaNa.Dev connection on page load
+        window.addEventListener('load', async function() {
+            try {
+                const response = await fetch('/api/test-lipana');
+                const data = await response.json();
+                if (data.success) {
+                    console.log('LipaNa.Dev API connection successful');
+                }
+            } catch (error) {
+                console.log('LipaNa.Dev test skipped or failed');
+            }
+        });
+    </script>
+</body>
+</html>
