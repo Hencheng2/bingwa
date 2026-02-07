@@ -38,12 +38,12 @@ class Config:
     # Determine callback URL based on environment
     if 'RENDER' in os.environ:
         # Running on Render.com
-        RENDER_EXTERNAL_HOSTNAME = os.environ.get('bingwa.onrender.com')
+        RENDER_EXTERNAL_HOSTNAME = os.environ.get('https://bingwa-al7a.onrender.com/')
         if RENDER_EXTERNAL_HOSTNAME:
-            LIPANA_CALLBACK_URL = f"https://bingwa.onrender.com/api/payment-callback"
+            LIPANA_CALLBACK_URL = f"https://bingwa-al7a.onrender.com/api/payment-callback"
         else:
             # Fallback for Render
-            LIPANA_CALLBACK_URL = "https://bingwa.onrender.com/api/payment-callback"
+            LIPANA_CALLBACK_URL = "https://bingwa-al7a.onrender.com/api/payment-callback"
     else:
         # Local development
         LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
@@ -782,4 +782,5 @@ if __name__ == '__main__':
         port=port,
         debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     )
+
 
