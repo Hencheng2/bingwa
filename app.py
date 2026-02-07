@@ -33,18 +33,18 @@ class Config:
     BUSINESS_NAME = "BINGWA DATA SALES"
     
     # Secret Key from environment or generate
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'bingwa-secret-key-change-in-production')
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'd15a3f8c9e2b7a1d4f6c8a9b3e5d7f2a1c4e8b9d3f6a2c5e8b1d4f7a9c3e6b2d8')
     
     # Determine callback URL based on environment
     if 'RENDER' in os.environ:
         # Running on Render.com
         RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
         if RENDER_EXTERNAL_HOSTNAME:
-            LIPANA_CALLBACK_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}/api/payment-callback"
+            LIPANA_CALLBACK_URL = f"https://https://bingwa.onrender.com/api/payment-callback/api/payment-callback"
         else:
             # Fallback for Render
-            RENDER_SERVICE_NAME = os.environ.get('RENDER_SERVICE_NAME', 'bingwa-data-sales')
-            LIPANA_CALLBACK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/api/payment-callback"
+            RENDER_SERVICE_NAME = os.environ.get('RENDER_SERVICE_NAME', 'bingwa')
+            LIPANA_CALLBACK_URL = f"https://https://bingwa.onrender.com/api/payment-callback.onrender.com/api/payment-callback"
     else:
         # Local development
         LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
@@ -791,3 +791,4 @@ if __name__ == '__main__':
         port=port,
         debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     )
+
