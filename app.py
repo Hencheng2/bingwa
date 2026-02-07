@@ -1,16 +1,15 @@
 """
 Bingwa Data Sales - Complete Backend with STK Push Integration
+Optimized for Render.com deployment
 """
 import os
 import sqlite3
 from datetime import datetime, timedelta
 import logging
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import requests
-import hashlib
 import secrets
-from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,24 +18,44 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, 
            static_folder='static',
            template_folder='templates')
-app.secret_key = 'bingwa-secret-key-2024-change-this-in-production'  # Change this for production!
 
 # Enable CORS
 CORS(app)
 
-# Configuration
+# Configuration for Render.com
 class Config:
-    # LipaNa.Dev API Configuration - USING YOUR ACTUAL KEYS
-    LIPANA_API_KEY = "lip_sk_live_a318ed18e46db96f461830a4c282ff3f55feeca84f9b6433c6ac2a47525c4b32"
+    # LipaNa.Dev API Configuration
+    LIPANA_API_KEY = os.environ.get('LIPANA_API_KEY', 'lip_sk_live_a318ed18e46db96f461830a4c282ff3f55feeca84f9b6433c6ac2a47525c4b32')
     LIPANA_BASE_URL = "https://api.lipana.dev/v1"
-    LIPANA_CALLBACK_URL = "https://your-actual-domain.com/api/payment-callback"  # CHANGE THIS TO YOUR DOMAIN
     
     # Business Configuration
-    BUSINESS_SHORTCODE = "4864614"  # Your actual till number from the instructions
+    BUSINESS_SHORTCODE = os.environ.get('LIPANA_BUSINESS_SHORTCODE', '4864614')
     BUSINESS_NAME = "BINGWA DATA SALES"
     
-    # Database
-    DATABASE_PATH = os.path.join(app.instance_path, 'bingwa.db')
+    # Secret Key from environment or generate
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'bingwa-secret-key-change-in-production')
+    
+    # Determine callback URL based on environment
+    if 'RENDER' in os.environ:
+        # Running on Render.com
+        RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+        if RENDER_EXTERNAL_HOSTNAME:
+            LIPANA_CALLBACK_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}/api/payment-callback"
+        else:
+            # Fallback for Render
+            RENDER_SERVICE_NAME = os.environ.get('RENDER_SERVICE_NAME', 'bingwa-data-sales')
+            LIPANA_CALLBACK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/api/payment-callback"
+    else:
+        # Local development
+        LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
+    
+    # Database configuration for Render
+    if 'RENDER' in os.environ:
+        # Render provides persistent disk at /var/data
+        DATABASE_PATH = '/var/data/bingwa.db'
+    else:
+        # Local development
+        DATABASE_PATH = os.path.join(app.instance_path, 'bingwa.db')
     
     # Data Packages
     DATA_PACKAGES = [
@@ -48,9 +67,13 @@ class Config:
     ]
 
 app.config.from_object(Config)
+app.secret_key = app.config['SECRET_KEY']
 
-# Ensure instance folder exists
-os.makedirs(app.instance_path, exist_ok=True)
+# Ensure database directory exists
+if 'RENDER' in os.environ:
+    os.makedirs('/var/data', exist_ok=True)
+else:
+    os.makedirs(app.instance_path, exist_ok=True)
 
 # Database setup
 def get_db():
@@ -116,8 +139,15 @@ def init_db():
         )
     ''')
     
+    # Create indexes for better performance
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_phone ON transactions(phone_number)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_checkout ON transactions(checkout_request_id)')
+    
     conn.commit()
     conn.close()
+    logger.info("Database initialized successfully")
 
 # Initialize database on startup
 init_db()
@@ -141,17 +171,19 @@ def generate_transaction_id():
     return f"BINGWA-{timestamp}-{random_str}"
 
 def validate_phone_number(phone):
-    """Validate Kenyan phone number format"""
+    """Validate Kenyan phone number format for LipaNa.Dev"""
     # Remove any non-digit characters
     phone = ''.join(filter(str.isdigit, phone))
     
-    # Check if it's a valid Kenyan number
-    if len(phone) == 10 and phone.startswith('07'):
-        return '254' + phone[1:]  # Convert to international format
-    elif len(phone) == 12 and phone.startswith('254'):
+    # For LipaNa.Dev, try international format first
+    if len(phone) == 12 and phone.startswith('254'):
         return phone
+    elif len(phone) == 10 and phone.startswith('07'):
+        return '254' + phone[1:]
     elif len(phone) == 9 and phone.startswith('7'):
         return '254' + phone
+    elif len(phone) >= 9 and len(phone) <= 12:
+        return phone
     else:
         return None
 
@@ -334,9 +366,10 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
         'business_shortcode': app.config['BUSINESS_SHORTCODE']
     }
     
+    logger.info(f"Attempting STK Push to LipaNa.Dev")
+    logger.info(f"Payload: {payload}")
+    
     try:
-        logger.info(f"Sending STK Push request to LipaNa.Dev: {payload}")
-        
         response = requests.post(
             f'{app.config["LIPANA_BASE_URL"]}/stk/push',
             headers=headers,
@@ -344,8 +377,10 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
             timeout=30
         )
         
+        logger.info(f"LipaNa.Dev Response Status: {response.status_code}")
+        logger.info(f"LipaNa.Dev Response: {response.text}")
+        
         response_data = response.json()
-        logger.info(f"LipaNa.Dev response: {response_data}")
         
         if response.status_code == 200 and response_data.get('success'):
             return {
@@ -354,25 +389,42 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
                 'customer_message': response_data.get('customer_message', 'Request sent successfully')
             }
         else:
-            error_msg = response_data.get('message', 'Payment request failed')
+            error_msg = response_data.get('message', f'Payment request failed with status {response.status_code}')
             logger.error(f"LipaNa.Dev API error: {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
             }
             
+    except requests.exceptions.Timeout:
+        logger.error("LipaNa.Dev API timeout")
+        return {
+            'success': False,
+            'message': 'Payment service timeout. Please try again.'
+        }
+    except requests.exceptions.ConnectionError:
+        logger.error("LipaNa.Dev API connection error")
+        return {
+            'success': False,
+            'message': 'Cannot connect to payment service. Please try again later.'
+        }
     except requests.exceptions.RequestException as e:
-        logger.error(f"LipaNa.Dev API connection error: {str(e)}")
+        logger.error(f"LipaNa.Dev API request error: {str(e)}")
         return {
             'success': False,
             'message': 'Payment service temporarily unavailable. Please try manual payment.'
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error in STK Push: {str(e)}")
+        return {
+            'success': False,
+            'message': 'An unexpected error occurred. Please try manual payment.'
         }
 
 @app.route('/api/payment-callback', methods=['POST'])
 def payment_callback():
     """
     Callback endpoint for LipaNa.Dev to send payment results
-    This endpoint should be publicly accessible
     """
     try:
         data = request.json
@@ -385,21 +437,21 @@ def payment_callback():
         mpesa_receipt = data.get('MpesaReceiptNumber', '')
         phone = data.get('PhoneNumber', '')
         amount = data.get('Amount', 0)
+        reference = data.get('reference', '')
         
         # Find transaction
         conn = get_db()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT * FROM transactions 
-            WHERE checkout_request_id = ? 
-            OR transaction_id = ?
-        ''', (checkout_request_id, data.get('reference', '')))
+        if checkout_request_id:
+            cursor.execute('SELECT * FROM transactions WHERE checkout_request_id = ?', (checkout_request_id,))
+        else:
+            cursor.execute('SELECT * FROM transactions WHERE transaction_id = ?', (reference,))
         
         transaction = cursor.fetchone()
         
         if not transaction:
-            logger.error(f"Transaction not found for checkout ID: {checkout_request_id}")
+            logger.error(f"Transaction not found. Checkout ID: {checkout_request_id}, Reference: {reference}")
             conn.close()
             return jsonify({'success': False, 'message': 'Transaction not found'}), 404
         
@@ -409,19 +461,11 @@ def payment_callback():
             status = 'completed'
             result_description = 'Payment completed successfully'
             
-            # Here you would trigger data allocation to the recipient number
             logger.info(f"Payment successful for transaction {transaction['transaction_id']}")
             logger.info(f"Data should be loaded to: {transaction['recipient_number']}")
             
-            # IMPORTANT: This is where you integrate with your data loading system
-            # Call your API to allocate data to the recipient phone
-            
-            # For now, we'll log it. In production, implement:
-            # allocate_data_bundle(
-            #     phone=transaction['recipient_number'],
-            #     amount=transaction['amount'],
-            #     transaction_id=transaction['transaction_id']
-            # )
+            # TODO: Integrate with your data loading system here
+            # allocate_data_bundle(transaction['recipient_number'], transaction['amount'], transaction['transaction_id'])
             
         else:
             # Payment failed
@@ -445,7 +489,6 @@ def payment_callback():
         # Log audit
         log_audit('payment_callback', f'Transaction: {transaction["transaction_id"]}, Status: {status}')
         
-        # Return success response to LipaNa.Dev
         return jsonify({'success': True, 'message': 'Callback processed successfully'})
         
     except Exception as e:
@@ -602,6 +645,26 @@ def manual_payment():
             'message': f'Error: {str(e)}'
         }), 500
 
+@app.route('/api/debug')
+def debug_info():
+    """Debug endpoint to check configuration"""
+    return jsonify({
+        'success': True,
+        'environment': {
+            'on_render': 'RENDER' in os.environ,
+            'render_external_hostname': os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
+            'callback_url': app.config['LIPANA_CALLBACK_URL'],
+            'database_path': app.config['DATABASE_PATH'],
+            'business_shortcode': app.config['BUSINESS_SHORTCODE'],
+            'api_key_configured': bool(app.config['LIPANA_API_KEY']),
+            'api_key_length': len(app.config['LIPANA_API_KEY']) if app.config['LIPANA_API_KEY'] else 0
+        },
+        'app': {
+            'name': app.config['BUSINESS_NAME'],
+            'packages_count': len(app.config['DATA_PACKAGES'])
+        }
+    })
+
 @app.route('/api/test-lipana', methods=['GET'])
 def test_lipana():
     """Test endpoint to verify LipaNa.Dev connection"""
@@ -620,19 +683,27 @@ def test_lipana():
         return jsonify({
             'success': True,
             'lipana_status': response.status_code,
-            'message': 'LipaNa.Dev API connection successful',
-            'business_shortcode': app.config['BUSINESS_SHORTCODE']
+            'response': response.text,
+            'config': {
+                'callback_url': app.config['LIPANA_CALLBACK_URL'],
+                'business_shortcode': app.config['BUSINESS_SHORTCODE'],
+                'api_key_configured': bool(app.config['LIPANA_API_KEY'])
+            }
         })
         
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'LipaNa.Dev connection failed: {str(e)}'
+            'message': f'LipaNa.Dev connection failed: {str(e)}',
+            'config': {
+                'callback_url': app.config['LIPANA_CALLBACK_URL'],
+                'business_shortcode': app.config['BUSINESS_SHORTCODE']
+            }
         }), 500
 
 @app.route('/api/stats')
 def get_stats():
-    """Get system statistics (admin view)"""
+    """Get system statistics"""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -669,7 +740,8 @@ def get_stats():
             'pending_transactions': pending_transactions,
             'total_revenue': total_revenue,
             'business_name': app.config['BUSINESS_NAME'],
-            'callback_url': app.config['LIPANA_CALLBACK_URL']
+            'callback_url': app.config['LIPANA_CALLBACK_URL'],
+            'on_render': 'RENDER' in os.environ
         }
     })
 
@@ -688,24 +760,34 @@ def server_error(error):
         'message': 'Internal server error'
     }), 500
 
+# Health check endpoint for Render
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'service': 'Bingwa Data Sales',
+        'timestamp': datetime.now().isoformat()
+    })
+
 if __name__ == '__main__':
-    # Create database if not exists
+    # Initialize database
     init_db()
     
-    # Run the app
+    # Display startup information
     print("=" * 60)
     print("BINGWA DATA SALES SYSTEM")
     print("=" * 60)
     print(f"Business: {app.config['BUSINESS_NAME']}")
     print(f"Till Number: {app.config['BUSINESS_SHORTCODE']}")
     print(f"Callback URL: {app.config['LIPANA_CALLBACK_URL']}")
-    print("=" * 60)
-    print("IMPORTANT: Update LIPANA_CALLBACK_URL to your actual domain!")
-    print("Example: https://yourdomain.com/api/payment-callback")
+    print(f"Database: {app.config['DATABASE_PATH']}")
+    print(f"On Render.com: {'RENDER' in os.environ}")
     print("=" * 60)
     
+    # Run the app
+    port = int(os.environ.get('PORT', 5000))
     app.run(
         host='0.0.0.0',
-        port=5000,
-        debug=True  # Set to False in production
+        port=port,
+        debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     )
