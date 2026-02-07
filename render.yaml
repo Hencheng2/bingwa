@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: bingwa
+    env: python
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LIPANA_API_KEY
+        value: lip_sk_live_a318ed18e46db96f461830a4c282ff3f55feeca84f9b6433c6ac2a47525c4b32
+      - key: LIPANA_BUSINESS_SHORTCODE
+        value: "4864614"
+      - key: PRODUCTION
+        value: "true"
+    disk:
+      name: bingwa-data
+      mountPath: /var/data
+      sizeGB: 1
