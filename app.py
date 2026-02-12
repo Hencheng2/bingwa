@@ -1,6 +1,7 @@
 """
 Bingwa Data Sales - Complete Backend with STK Push Integration
 Optimized for Render.com deployment
+FIXED: LipaNa.Dev API endpoints and error handling
 """
 import os
 import sqlite3
@@ -24,9 +25,9 @@ CORS(app)
 
 # Configuration for Render.com
 class Config:
-    # LipaNa.Dev API Configuration
+    # LipaNa.Dev API Configuration - FIXED: Removed /v1 from base URL
     LIPANA_API_KEY = os.environ.get('LIPANA_API_KEY', 'lip_sk_live_a318ed18e46db96f461830a4c282ff3f55feeca84f9b6433c6ac2a47525c4b32')
-    LIPANA_BASE_URL = "https://api.lipana.dev/v1"
+    LIPANA_BASE_URL = "https://api.lipana.dev"  # FIXED: Removed /v1
     
     # Business Configuration
     BUSINESS_SHORTCODE = os.environ.get('LIPANA_BUSINESS_SHORTCODE', '4864614')
@@ -35,12 +36,12 @@ class Config:
     # Secret Key from environment or generate
     SECRET_KEY = os.environ.get('SECRET_KEY', 'd15a3f8c9e2b7a1d4f6c8a9b3e5d7f2a1c4e8b9d3f6a2c5e8b1d4f7a9c3e6b2d8')
     
-    # Determine callback URL based on environment
+    # Determine callback URL based on environment - FIXED
     if 'RENDER' in os.environ:
         # Running on Render.com
-        RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+        RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'bingwa-al7a.onrender.com')
         if RENDER_EXTERNAL_HOSTNAME:
-            LIPANA_CALLBACK_URL = f"https://bingwa-al7a.onrender.com/api/payment-callback"
+            LIPANA_CALLBACK_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}/api/payment-callback"
         else:
             # Fallback for Render
             LIPANA_CALLBACK_URL = "https://bingwa-al7a.onrender.com/api/payment-callback"
@@ -48,12 +49,13 @@ class Config:
         # Local development
         LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
     
-    # Database configuration for Render - FIXED
+    # Database configuration for Render
     if 'RENDER' in os.environ:
         # Use current directory for database
         DATABASE_PATH = os.path.join(os.getcwd(), 'bingwa.db')
     else:
-        # Local development
+        # Local development - ensure instance folder exists
+        os.makedirs(app.instance_path, exist_ok=True)
         DATABASE_PATH = os.path.join(app.instance_path, 'bingwa.db')
     
     # Data Packages
@@ -169,15 +171,17 @@ def validate_phone_number(phone):
     # Remove any non-digit characters
     phone = ''.join(filter(str.isdigit, phone))
     
-    # For LipaNa.Dev, try international format first
+    # For LipaNa.Dev, use international format
     if len(phone) == 12 and phone.startswith('254'):
         return phone
     elif len(phone) == 10 and phone.startswith('07'):
         return '254' + phone[1:]
+    elif len(phone) == 10 and phone.startswith('01'):
+        return '254' + phone[1:]
     elif len(phone) == 9 and phone.startswith('7'):
         return '254' + phone
-    elif len(phone) >= 9 and len(phone) <= 12:
-        return phone
+    elif len(phone) == 9 and phone.startswith('1'):
+        return '254' + phone
     else:
         return None
 
@@ -229,7 +233,7 @@ def initiate_payment():
         
         # Validate phone numbers
         formatted_phone = validate_phone_number(phone)
-        formatted_recipient = validate_phone_number(recipient_phone)
+        formatted_recipient = validate_phone_number(recipient_phone) if recipient_phone else formatted_phone
         
         if not formatted_phone:
             return jsonify({
@@ -240,7 +244,7 @@ def initiate_payment():
         # Get package details
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM packages WHERE id = ?', (package_id,))
+        cursor.execute('SELECT * FROM packages WHERE id = ? AND is_active = 1', (package_id,))
         package = cursor.fetchone()
         
         if not package:
@@ -291,7 +295,7 @@ def initiate_payment():
             phone=formatted_phone,
             amount=package['price'],
             transaction_id=transaction_id,
-            description=f"{package['size']} Data Bundle - Bingwa Sokoni"
+            description=f"{package['size']} Data Bundle - {package['validity']}"
         )
         
         if lipana_response.get('success'):
@@ -329,9 +333,11 @@ def initiate_payment():
             conn.commit()
             conn.close()
             
+            # Return the actual error message from LipaNa.Dev
             return jsonify({
                 'success': False,
-                'message': lipana_response.get('message', 'Failed to initiate payment')
+                'message': lipana_response.get('message', 'Failed to initiate payment'),
+                'details': lipana_response.get('details', '')
             }), 500
             
     except Exception as e:
@@ -344,6 +350,7 @@ def initiate_payment():
 def initiate_lipana_stk_push(phone, amount, transaction_id, description):
     """
     Initiate STK Push via ACTUAL LipaNa.Dev API
+    FIXED: Correct payload format and error handling
     """
     
     headers = {
@@ -351,21 +358,21 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
         'Content-Type': 'application/json'
     }
     
+    # FIXED: Correct payload format for LipaNa.Dev
     payload = {
-        'phone': phone,
-        'amount': amount,
-        'description': description,
+        'phone_number': phone,  # FIXED: Use 'phone_number' not 'phone'
+        'amount': int(amount),  # FIXED: Use integer, not string
+        'account_reference': transaction_id[:20],  # FIXED: Max 20 chars
+        'transaction_desc': description[:13],  # FIXED: Max 13 chars
         'callback_url': app.config['LIPANA_CALLBACK_URL'],
-        'reference': transaction_id,
         'business_shortcode': app.config['BUSINESS_SHORTCODE']
     }
     
-    logger.info(f"Attempting STK Push to LipaNa.Dev")
-    logger.info(f"Payload: {payload}")
+    logger.info(f"STK Push Payload: {payload}")
     
     try:
         response = requests.post(
-            f'{app.config["LIPANA_BASE_URL"]}/stk/push',
+            f'{app.config["LIPANA_BASE_URL"]}/stk/push',  # FIXED: Correct endpoint
             headers=headers,
             json=payload,
             timeout=30
@@ -374,33 +381,43 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
         logger.info(f"LipaNa.Dev Response Status: {response.status_code}")
         logger.info(f"LipaNa.Dev Response: {response.text}")
         
-        response_data = response.json()
+        # Try to parse response
+        try:
+            response_data = response.json()
+        except:
+            response_data = {"message": response.text}
         
-        if response.status_code == 200 and response_data.get('success'):
+        # Check for successful response
+        if response.status_code in [200, 201] and response_data.get('success'):
             return {
                 'success': True,
                 'checkout_request_id': response_data.get('checkout_request_id'),
                 'customer_message': response_data.get('customer_message', 'Request sent successfully')
             }
         else:
-            error_msg = response_data.get('message', f'Payment request failed with status {response.status_code}')
-            logger.error(f"LipaNa.Dev API error: {error_msg}")
+            # Extract meaningful error message
+            error_msg = response_data.get('message', response_data.get('error', f'HTTP {response.status_code}'))
+            error_details = response_data.get('details', response_data.get('errors', ''))
+            
+            logger.error(f"LipaNa.Dev API error: {error_msg} - {error_details}")
+            
             return {
                 'success': False,
-                'message': error_msg
+                'message': error_msg,
+                'details': error_details
             }
             
     except requests.exceptions.Timeout:
         logger.error("LipaNa.Dev API timeout")
         return {
             'success': False,
-            'message': 'Payment service timeout. Please try again.'
+            'message': 'Payment service timeout. Please try again or use manual payment.'
         }
     except requests.exceptions.ConnectionError:
         logger.error("LipaNa.Dev API connection error")
         return {
             'success': False,
-            'message': 'Cannot connect to payment service. Please try again later.'
+            'message': 'Cannot connect to payment service. Please try manual payment.'
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"LipaNa.Dev API request error: {str(e)}")
@@ -419,19 +436,21 @@ def initiate_lipana_stk_push(phone, amount, transaction_id, description):
 def payment_callback():
     """
     Callback endpoint for LipaNa.Dev to send payment results
+    FIXED: Better handling of different callback formats
     """
     try:
         data = request.json
         logger.info(f"Payment callback received: {data}")
         
-        # Parse callback data from LipaNa.Dev
-        result_code = data.get('ResultCode', '1')
-        result_desc = data.get('ResultDesc', '')
-        checkout_request_id = data.get('CheckoutRequestID', '')
-        mpesa_receipt = data.get('MpesaReceiptNumber', '')
-        phone = data.get('PhoneNumber', '')
-        amount = data.get('Amount', 0)
-        reference = data.get('reference', '')
+        # Handle different possible callback formats
+        # Format 1: LipaNa.Dev standard
+        result_code = data.get('ResultCode', data.get('result_code', '1'))
+        result_desc = data.get('ResultDesc', data.get('result_desc', ''))
+        checkout_request_id = data.get('CheckoutRequestID', data.get('checkout_request_id', ''))
+        mpesa_receipt = data.get('MpesaReceiptNumber', data.get('mpesa_receipt', data.get('transaction_id', '')))
+        phone = data.get('PhoneNumber', data.get('phone_number', ''))
+        amount = data.get('Amount', data.get('amount', 0))
+        reference = data.get('reference', data.get('account_reference', ''))
         
         # Find transaction
         conn = get_db()
@@ -439,8 +458,12 @@ def payment_callback():
         
         if checkout_request_id:
             cursor.execute('SELECT * FROM transactions WHERE checkout_request_id = ?', (checkout_request_id,))
-        else:
+        elif reference:
             cursor.execute('SELECT * FROM transactions WHERE transaction_id = ?', (reference,))
+        else:
+            logger.error("No identifier found in callback")
+            conn.close()
+            return jsonify({'success': False, 'message': 'No transaction identifier'}), 400
         
         transaction = cursor.fetchone()
         
@@ -450,13 +473,13 @@ def payment_callback():
             return jsonify({'success': False, 'message': 'Transaction not found'}), 404
         
         # Update transaction based on result
-        if result_code == '0':
+        if str(result_code) == '0' or str(result_code) == '0':
             # Payment successful
             status = 'completed'
             result_description = 'Payment completed successfully'
             
-            logger.info(f"Payment successful for transaction {transaction['transaction_id']}")
-            logger.info(f"Data should be loaded to: {transaction['recipient_number']}")
+            logger.info(f"✅ Payment successful for transaction {transaction['transaction_id']}")
+            logger.info(f"📱 Data should be loaded to: {transaction['recipient_number']}")
             
             # TODO: Integrate with your data loading system here
             # allocate_data_bundle(transaction['recipient_number'], transaction['amount'], transaction['transaction_id'])
@@ -464,7 +487,8 @@ def payment_callback():
         else:
             # Payment failed
             status = 'failed'
-            result_description = result_desc
+            result_description = result_desc or 'Payment failed'
+            logger.info(f"❌ Payment failed for transaction {transaction['transaction_id']}: {result_description}")
         
         # Update transaction in database
         cursor.execute('''
@@ -512,17 +536,15 @@ def check_payment_status():
             cursor.execute('SELECT * FROM transactions WHERE checkout_request_id = ?', (checkout_request_id,))
         
         transaction = cursor.fetchone()
-        conn.close()
         
         if not transaction:
+            conn.close()
             return jsonify({
                 'success': False,
                 'message': 'Transaction not found'
             }), 404
         
         # Get package details
-        conn = get_db()
-        cursor = conn.cursor()
         cursor.execute('SELECT * FROM packages WHERE id = ?', (transaction['package_id'],))
         package = cursor.fetchone()
         conn.close()
@@ -642,6 +664,14 @@ def manual_payment():
 @app.route('/api/debug')
 def debug_info():
     """Debug endpoint to check configuration"""
+    # Test database connection
+    db_status = "OK"
+    try:
+        conn = get_db()
+        conn.close()
+    except Exception as e:
+        db_status = f"Error: {str(e)}"
+    
     return jsonify({
         'success': True,
         'environment': {
@@ -649,13 +679,16 @@ def debug_info():
             'render_external_hostname': os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
             'callback_url': app.config['LIPANA_CALLBACK_URL'],
             'database_path': app.config['DATABASE_PATH'],
+            'database_status': db_status,
             'business_shortcode': app.config['BUSINESS_SHORTCODE'],
             'api_key_configured': bool(app.config['LIPANA_API_KEY']),
+            'api_key_type': 'test' if 'test' in app.config['LIPANA_API_KEY'] else 'live' if app.config['LIPANA_API_KEY'] else 'none',
             'api_key_length': len(app.config['LIPANA_API_KEY']) if app.config['LIPANA_API_KEY'] else 0
         },
         'app': {
             'name': app.config['BUSINESS_NAME'],
-            'packages_count': len(app.config['DATA_PACKAGES'])
+            'packages_count': len(app.config['DATA_PACKAGES']),
+            'packages': app.config['DATA_PACKAGES']
         }
     })
 
@@ -668,30 +701,60 @@ def test_lipana():
             'Content-Type': 'application/json'
         }
         
-        response = requests.get(
-            f'{app.config["LIPANA_BASE_URL"]}/status',
+        # FIXED: Use a minimal test payload to validate API key and connection
+        test_payload = {
+            'phone_number': '254708374149',  # LipaNa.Dev test number
+            'amount': 1,
+            'account_reference': 'TEST',
+            'transaction_desc': 'API Test',
+            'callback_url': app.config['LIPANA_CALLBACK_URL'],
+            'business_shortcode': app.config['BUSINESS_SHORTCODE']
+        }
+        
+        logger.info(f"Testing LipaNa.Dev with payload: {test_payload}")
+        
+        response = requests.post(
+            f'{app.config["LIPANA_BASE_URL"]}/stk/push',
             headers=headers,
-            timeout=10
+            json=test_payload,
+            timeout=15
         )
+        
+        # Try to parse response
+        try:
+            response_data = response.json()
+        except:
+            response_data = {"raw": response.text}
         
         return jsonify({
             'success': True,
-            'lipana_status': response.status_code,
-            'response': response.text,
+            'message': 'Test completed',
+            'status_code': response.status_code,
+            'response': response_data,
             'config': {
+                'base_url': app.config['LIPANA_BASE_URL'],
                 'callback_url': app.config['LIPANA_CALLBACK_URL'],
                 'business_shortcode': app.config['BUSINESS_SHORTCODE'],
                 'api_key_configured': bool(app.config['LIPANA_API_KEY'])
             }
         })
         
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'success': False,
+            'message': 'Cannot connect to LipaNa.Dev - Check your internet or firewall',
+            'config': {
+                'base_url': app.config['LIPANA_BASE_URL'],
+                'callback_url': app.config['LIPANA_CALLBACK_URL']
+            }
+        }), 500
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'LipaNa.Dev connection failed: {str(e)}',
+            'message': f'LipaNa.Dev test failed: {str(e)}',
             'config': {
-                'callback_url': app.config['LIPANA_CALLBACK_URL'],
-                'business_shortcode': app.config['BUSINESS_SHORTCODE']
+                'base_url': app.config['LIPANA_BASE_URL'],
+                'callback_url': app.config['LIPANA_CALLBACK_URL']
             }
         }), 500
 
@@ -766,13 +829,20 @@ def health_check():
 if __name__ == '__main__':
     # Display startup information
     print("=" * 60)
-    print("BINGWA DATA SALES SYSTEM")
+    print("🚀 BINGWA DATA SALES SYSTEM - FIXED VERSION")
     print("=" * 60)
-    print(f"Business: {app.config['BUSINESS_NAME']}")
-    print(f"Till Number: {app.config['BUSINESS_SHORTCODE']}")
-    print(f"Callback URL: {app.config['LIPANA_CALLBACK_URL']}")
-    print(f"Database: {app.config['DATABASE_PATH']}")
-    print(f"On Render.com: {'RENDER' in os.environ}")
+    print(f"🏪 Business: {app.config['BUSINESS_NAME']}")
+    print(f"💰 Till Number: {app.config['BUSINESS_SHORTCODE']}")
+    print(f"📞 Callback URL: {app.config['LIPANA_CALLBACK_URL']}")
+    print(f"💾 Database: {app.config['DATABASE_PATH']}")
+    print(f"☁️  On Render.com: {'RENDER' in os.environ}")
+    print(f"🔑 API Key: {'✅ Configured' if app.config['LIPANA_API_KEY'] else '❌ Missing'}")
+    print(f"🌐 API Base URL: {app.config['LIPANA_BASE_URL']}")
+    print("=" * 60)
+    print("📱 STK Push endpoint: /api/initiate-payment")
+    print("📞 Callback endpoint: /api/payment-callback")
+    print("🔍 Debug endpoint: /api/debug")
+    print("🧪 Test LipaNa endpoint: /api/test-lipana")
     print("=" * 60)
     
     # Run the app
@@ -782,7 +852,3 @@ if __name__ == '__main__':
         port=port,
         debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     )
-
-
-
-
