@@ -1,695 +1,976 @@
-"""
-Bingwa Data Sales - Complete Backend with STK Push Integration
-Optimized for Render.com deployment
-FIXED: Using LipaNa Python package instead of direct API calls
-"""
-import os
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import sqlite3
-from datetime import datetime, timedelta
-import logging
-from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS
-from lipana import Lipana
-import secrets
+import os
+from werkzeug.utils import secure_filename
+from google.cloud import vision
+import io
+import re
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['DATABASE'] = 'library.db'
 
-app = Flask(__name__, 
-           static_folder='static',
-           template_folder='templates')
+# Create upload folder if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Enable CORS
-CORS(app)
+# ==================== GOOGLE VISION API SETUP WITH API KEY ====================
 
-# Configuration for Render.com
-class Config:
-    # LipaNa.Dev API Configuration - Using the lipana package
-    LIPANA_API_KEY = os.environ.get('LIPANA_API_KEY', 'lip_sk_live_a318ed18e46db96f461830a4c282ff3f55feeca84f9b6433c6ac2a47525c4b32')
-    LIPANA_ENVIRONMENT = 'production'  # or 'sandbox' for testing
-    
-    # Business Configuration
-    BUSINESS_SHORTCODE = os.environ.get('LIPANA_BUSINESS_SHORTCODE', '4864614')
-    BUSINESS_NAME = "BINGWA DATA SALES"
-    
-    # Secret Key from environment or generate
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'd15a3f8c9e2b7a1d4f6c8a9b3e5d7f2a1c4e8b9d3f6a2c5e8b1d4f7a9c3e6b2d8')
-    
-    # Determine callback URL based on environment
-    if 'RENDER' in os.environ:
-        # Running on Render.com
-        RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'bingwa-al7a.onrender.com')
-        if RENDER_EXTERNAL_HOSTNAME:
-            LIPANA_CALLBACK_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}/api/payment-callback"
-        else:
-            # Fallback for Render
-            LIPANA_CALLBACK_URL = "https://bingwa-al7a.onrender.com/api/payment-callback"
-    else:
-        # Local development
-        LIPANA_CALLBACK_URL = "http://localhost:5000/api/payment-callback"
-    
-    # Database configuration for Render
-    if 'RENDER' in os.environ:
-        DATABASE_PATH = os.path.join(os.getcwd(), 'bingwa.db')
-    else:
-        os.makedirs(app.instance_path, exist_ok=True)
-        DATABASE_PATH = os.path.join(app.instance_path, 'bingwa.db')
-    
-    # Data Packages
-    DATA_PACKAGES = [
-        {"id": 1, "size": "1.25 GB", "price": 55, "validity": "midnight", "description": "Valid till midnight"},
-        {"id": 2, "size": "250 MB", "price": 20, "validity": "24hrs", "description": "Valid 24 hours"},
-        {"id": 3, "size": "1.5 GB", "price": 49, "validity": "3hrs", "description": "Valid 3 hours"},
-        {"id": 4, "size": "1 GB", "price": 19, "validity": "1hr", "description": "Valid 1 hour"},
-        {"id": 5, "size": "1 GB", "price": 99, "validity": "24hrs", "description": "Valid 24 hours"},
-    ]
+# Your API key
+VISION_API_KEY = "AIzaSyBjpGpW0HER87V_TiC8HAWNRUwCBRvhQ94"
 
-app.config.from_object(Config)
-app.secret_key = app.config['SECRET_KEY']
+# Initialize Vision API client with API key
+try:
+    client = vision.ImageAnnotatorClient(
+        client_options={"api_key": VISION_API_KEY}
+    )
+    print("✓ Vision API client initialized successfully with API key")
+except Exception as e:
+    print(f"✗ Warning: Could not initialize Vision API client: {e}")
+    client = None
 
-# Initialize LipaNa client
-lipana_client = Lipana(
-    api_key=app.config['LIPANA_API_KEY'],
-    environment=app.config['LIPANA_ENVIRONMENT']
-)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Database setup
-def get_db():
-    """Get database connection"""
-    conn = sqlite3.connect(app.config['DATABASE_PATH'])
+# ==================== DATABASE FUNCTIONS ====================
+
+def get_db_connection():
+    """Create a database connection"""
+    conn = sqlite3.connect(app.config['DATABASE'])
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
-    """Initialize database with tables"""
-    logger.info(f"Initializing database at: {app.config['DATABASE_PATH']}")
-    conn = get_db()
+def init_database():
+    """Initialize the database with required tables"""
+    conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Transactions table
+    # Create STUDENTS table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transactions (
+        CREATE TABLE IF NOT EXISTS students (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            transaction_id TEXT UNIQUE,
-            phone_number TEXT NOT NULL,
-            recipient_number TEXT NOT NULL,
-            package_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            status TEXT NOT NULL,
-            lipana_transaction_id TEXT,
-            mpesa_receipt_number TEXT,
-            result_description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            completed_at TIMESTAMP
+            adm_no TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            stream TEXT
         )
     ''')
     
-    # Packages table
+    # Create BOOKS table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS packages (
+        CREATE TABLE IF NOT EXISTS books (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            size TEXT NOT NULL,
-            price REAL NOT NULL,
-            validity TEXT NOT NULL,
-            description TEXT,
-            is_active BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            bookname TEXT,
+            bookcode TEXT UNIQUE NOT NULL
         )
     ''')
     
-    # Insert default packages if not exist
-    for package in app.config['DATA_PACKAGES']:
+    # Create ISSUED table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS issued (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT NOT NULL,
+            adm_no TEXT NOT NULL,
+            bookname TEXT,
+            stream TEXT,
+            date_issued DATE DEFAULT CURRENT_DATE,
+            FOREIGN KEY (adm_no) REFERENCES students(adm_no)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("✓ Database initialized successfully!")
+
+def add_student(adm_no, name, stream):
+    """Add a new student to the database"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
         cursor.execute('''
-            INSERT OR IGNORE INTO packages (id, size, price, validity, description)
+            INSERT OR IGNORE INTO students (adm_no, name, stream)
+            VALUES (?, ?, ?)
+        ''', (adm_no, name, stream))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error adding student: {e}")
+        return False
+    finally:
+        conn.close()
+
+def add_book(bookname, bookcode):
+    """Add a new book to the database"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT OR IGNORE INTO books (bookname, bookcode)
+            VALUES (?, ?)
+        ''', (bookname, bookcode))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error adding book: {e}")
+        return False
+    finally:
+        conn.close()
+
+def issue_book(student_name, adm_no, bookname, stream, date_issued):
+    """Issue a book to a student"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO issued (student_name, adm_no, bookname, stream, date_issued)
             VALUES (?, ?, ?, ?, ?)
-        ''', (package['id'], package['size'], package['price'], 
-              package['validity'], package['description']))
-    
-    # Audit log table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            details TEXT,
-            ip_address TEXT,
-            user_agent TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Create indexes
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_phone ON transactions(phone_number)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_lipana ON transactions(lipana_transaction_id)')
-    
-    conn.commit()
+        ''', (student_name, adm_no, bookname, stream, date_issued))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error issuing book: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_all_students():
+    """Retrieve all students"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM students ORDER BY adm_no')
+    students = cursor.fetchall()
     conn.close()
-    logger.info("Database initialized successfully")
+    return students
 
-# Initialize database on startup
-init_db()
+def get_all_books():
+    """Retrieve all books"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM books ORDER BY bookcode')
+    books = cursor.fetchall()
+    conn.close()
+    return books
 
-# Helper functions
-def log_audit(action, details=None):
-    """Log actions to audit table"""
-    conn = get_db()
+def get_all_issued():
+    """Retrieve all issued books"""
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO audit_log (action, details, ip_address, user_agent)
-        VALUES (?, ?, ?, ?)
-    ''', (action, details, request.remote_addr, request.user_agent.string))
-    conn.commit()
+        SELECT i.*, s.stream 
+        FROM issued i 
+        LEFT JOIN students s ON i.adm_no = s.adm_no 
+        ORDER BY i.date_issued DESC
+    ''')
+    issued = cursor.fetchall()
     conn.close()
+    return issued
 
-def generate_transaction_id():
-    """Generate unique transaction ID"""
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    random_str = secrets.token_hex(3).upper()
-    return f"BINGWA-{timestamp}-{random_str}"
-
-def validate_phone_number(phone):
-    """Validate Kenyan phone number format"""
-    phone = ''.join(filter(str.isdigit, phone))
+def get_statistics():
+    """Get library statistics"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # LipaNa package expects format like '+254712345678'
-    if len(phone) == 12 and phone.startswith('254'):
-        return f"+{phone}"
-    elif len(phone) == 10 and (phone.startswith('07') or phone.startswith('01')):
-        return f"+254{phone[1:]}"
-    elif len(phone) == 9 and (phone.startswith('7') or phone.startswith('1')):
-        return f"+254{phone}"
-    else:
-        return None
+    cursor.execute('SELECT COUNT(*) FROM students')
+    total_students = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM books')
+    total_books = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM issued')
+    total_issued = cursor.fetchone()[0]
+    
+    conn.close()
+    return total_students, total_books, total_issued
 
-# Routes
+# ==================== VISION API FUNCTIONS ====================
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def extract_bookcode(text):
+    """Extract book code from text (like 143/22, 20/326, RSS/143/22)"""
+    # Pattern for book codes (numbers/number format)
+    patterns = [
+        r'(\d{1,4}/\d{1,4})',  # Matches 143/22, 20/326
+        r'RSS?/?(\d{1,4}/\d{1,4})',  # Matches RSS/143/22, RSS143/22
+        r'(\d{1,4}/\d{1,4})/\w+',  # Matches 143/22/R
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1) if pattern == patterns[0] else match.group(1)
+    return None
+
+def clean_name(name_text):
+    """Clean and validate name"""
+    # Remove numbers and special characters
+    name = re.sub(r'[\d/\\]', ' ', name_text)
+    # Remove extra spaces
+    name = ' '.join(name.split())
+    # Check if it's a valid name (at least 3 letters)
+    if len(name) >= 3 and re.search(r'[A-Za-z]', name):
+        return name
+    return None
+
+def parse_student_records(text):
+    """Parse all student records from the extracted text"""
+    lines = text.split('\n')
+    records = []
+    current_record = {}
+    
+    # Find the start of the table (after headers)
+    start_idx = 0
+    for i, line in enumerate(lines):
+        if 'ADM.NO' in line.upper() or 'ADM NO' in line.upper():
+            start_idx = i + 1
+            break
+    
+    # Process each line
+    i = start_idx
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Skip empty lines and headers
+        if not line or line.startswith('TITLE') or line.startswith('TEACHER'):
+            i += 1
+            continue
+        
+        # Look for patterns in the line
+        # Check for admission number (2-4 digits)
+        adm_match = re.search(r'\b(\d{2,4})\b', line)
+        
+        if adm_match:
+            adm_no = adm_match.group(1)
+            
+            # Don't treat years as admission numbers
+            if adm_no.startswith(('19', '20')) and len(adm_no) == 4:
+                i += 1
+                continue
+            
+            # Get the rest of the line after the admission number
+            rest = line[line.find(adm_no) + len(adm_no):].strip()
+            
+            # Look for book code in this line or next lines
+            bookcode = extract_bookcode(line)
+            
+            # If no bookcode found, check next few lines
+            if not bookcode:
+                for j in range(1, 4):
+                    if i + j < len(lines):
+                        bookcode = extract_bookcode(lines[i + j])
+                        if bookcode:
+                            break
+            
+            # Extract name (everything before the bookcode)
+            name = None
+            if bookcode:
+                # Remove bookcode from the line to get name
+                name_part = line.replace(adm_no, '').replace(bookcode, '').strip()
+                # Also remove any RSS/ patterns
+                name_part = re.sub(r'RSS?/?\d+/\d+', '', name_part, flags=re.IGNORECASE).strip()
+                name = clean_name(name_part)
+            
+            # If we have all required data, create a record
+            if adm_no and name and bookcode:
+                record = {
+                    'adm_no': adm_no,
+                    'name': name,
+                    'bookcode': bookcode,
+                    'stream': 'Unknown'  # Will be updated from header
+                }
+                records.append(record)
+                print(f"Found record: {record}")
+        
+        i += 1
+    
+    # Try to extract stream from header
+    stream = 'Unknown'
+    for line in lines:
+        if 'CLASS:' in line:
+            stream_match = re.search(r'CLASS:\s*([^\s]+)', line)
+            if stream_match:
+                stream = stream_match.group(1)
+                break
+    
+    # Update stream for all records
+    for record in records:
+        record['stream'] = stream
+    
+    return records
+
+def process_image(image_path):
+    """Process image using Google Vision API to extract multiple records"""
+    if not client:
+        return {'error': 'Vision API client not initialized. Please check your API key.'}
+    
+    try:
+        with io.open(image_path, 'rb') as image_file:
+            content = image_file.read()
+        
+        image = vision.Image(content=content)
+        
+        # Perform text detection
+        response = client.text_detection(image=image)
+        texts = response.text_annotations
+        
+        if response.error.message:
+            return {'error': response.error.message}
+        
+        if not texts:
+            return {'error': 'No text detected in image'}
+        
+        # Get all text
+        full_text = texts[0].description
+        print("Full extracted text:", full_text)  # Debug print
+        
+        # Parse records from the text
+        records = parse_student_records(full_text)
+        
+        return {
+            'records': records,
+            'total_records': len(records)
+        }
+            
+    except Exception as e:
+        print(f"Error processing image: {str(e)}")
+        return {'error': str(e)}
+
+# ==================== ROUTES ====================
+
 @app.route('/')
 def index():
-    """Serve the main page"""
-    return render_template('index.html')
-
-@app.route('/api/packages')
-def get_packages():
-    """Get available data packages"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM packages WHERE is_active = 1 ORDER BY price')
-    packages = cursor.fetchall()
-    conn.close()
+    """Main page"""
+    students = get_all_students()
+    books = get_all_books()
+    issued = get_all_issued()
+    total_students, total_books, total_issued = get_statistics()
     
-    packages_list = []
-    for pkg in packages:
-        packages_list.append({
-            'id': pkg['id'],
-            'size': pkg['size'],
-            'price': pkg['price'],
-            'validity': pkg['validity'],
-            'description': pkg['description']
-        })
+    # Convert sqlite3.Row objects to lists for template compatibility
+    students_list = [[s['id'], s['adm_no'], s['name'], s['stream']] for s in students]
+    books_list = [[b['id'], b['bookname'], b['bookcode']] for b in books]
+    issued_list = [[i['id'], i['student_name'], i['adm_no'], i['bookname'], i['date_issued'], i['stream']] for i in issued]
     
-    return jsonify({
-        'success': True,
-        'packages': packages_list
-    })
+    return render_template('index.html', 
+                         students=students_list, 
+                         books=books_list, 
+                         issued=issued_list,
+                         total_students=total_students,
+                         total_books=total_books,
+                         total_issued=total_issued)
 
-@app.route('/api/initiate-payment', methods=['POST'])
-def initiate_payment():
-    """Initiate STK Push payment using LipaNa Python package"""
-    try:
-        data = request.json
-        phone = data.get('phone')
-        package_id = data.get('package_id')
-        recipient_phone = data.get('recipient_phone', phone)
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle image upload and processing for multiple records"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and allowed_file(file.filename):
+        # Generate unique filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        unique_filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(filepath)
         
-        if not phone or not package_id:
-            return jsonify({
-                'success': False,
-                'message': 'Phone number and package selection are required'
-            }), 400
-        
-        formatted_phone = validate_phone_number(phone)
-        formatted_recipient = validate_phone_number(recipient_phone) if recipient_phone else formatted_phone
-        
-        if not formatted_phone:
-            return jsonify({
-                'success': False,
-                'message': 'Invalid phone number format. Use 07XXXXXXXX or 2547XXXXXXXX'
-            }), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM packages WHERE id = ? AND is_active = 1', (package_id,))
-        package = cursor.fetchone()
-        
-        if not package:
-            conn.close()
-            return jsonify({
-                'success': False,
-                'message': 'Invalid package selected'
-            }), 400
-        
-        # Check daily purchase limit
-        today = datetime.now().strftime('%Y-%m-%d')
-        cursor.execute('''
-            SELECT COUNT(*) as count FROM transactions 
-            WHERE phone_number = ? AND date(created_at) = ? AND status = 'completed'
-        ''', (formatted_phone.replace('+', ''), today))
-        
-        daily_count = cursor.fetchone()['count']
-        if daily_count >= 1:
-            conn.close()
-            return jsonify({
-                'success': False,
-                'message': 'You can only purchase once per day per line'
-            }), 400
-        
-        # Create transaction
-        transaction_id = generate_transaction_id()
-        
-        cursor.execute('''
-            INSERT INTO transactions (
-                transaction_id, phone_number, recipient_number, 
-                package_id, amount, status
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            transaction_id, formatted_phone.replace('+', ''), formatted_recipient.replace('+', ''),
-            package_id, package['price'], 'pending'
-        ))
-        
-        transaction_db_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        log_audit('payment_initiated', f'Transaction: {transaction_id}, Phone: {formatted_phone}')
-        
-        # Initiate STK Push using LipaNa package
         try:
-            # Using the LipaNa package as per the sample code
-            stk_response = lipana_client.transactions.initiate_stk_push(
-                phone=formatted_phone,  # Should be in format '+254712345678'
-                amount=int(package['price']),
-                account_reference=transaction_id[:20],
-                transaction_desc=f"{package['size']} - {package['validity']}"[:13]
-            )
+            # Process image with Vision API
+            result = process_image(filepath)
             
-            logger.info(f"✅ LipaNa STK Response: {stk_response}")
+            if 'error' in result:
+                return jsonify({'error': result['error']}), 500
             
-            # Extract transaction ID from response
-            lipana_transaction_id = stk_response.get('transactionId') or stk_response.get('id')
+            # Save all records to database
+            saved_count = 0
+            failed_count = 0
             
-            if lipana_transaction_id:
-                # Update transaction with LipaNa transaction ID
-                conn = get_db()
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE transactions 
-                    SET lipana_transaction_id = ?
-                    WHERE id = ?
-                ''', (lipana_transaction_id, transaction_db_id))
-                conn.commit()
-                conn.close()
+            if result.get('records'):
+                for record in result['records']:
+                    try:
+                        # Add student
+                        add_student(record['adm_no'], record['name'], record['stream'])
+                        
+                        # Add book
+                        book_name = f"Book {record['bookcode']}"
+                        add_book(book_name, record['bookcode'])
+                        
+                        # Issue book
+                        issue_book(
+                            record['name'],
+                            record['adm_no'],
+                            book_name,
+                            record['stream'],
+                            datetime.now().strftime('%Y-%m-%d')
+                        )
+                        
+                        saved_count += 1
+                        print(f"✓ Saved: {record}")
+                    except Exception as e:
+                        print(f"✗ Failed to save record {record}: {e}")
+                        failed_count += 1
                 
                 return jsonify({
                     'success': True,
-                    'message': 'Payment request sent to your phone. Please check and enter your PIN.',
-                    'transaction_id': transaction_id,
-                    'lipana_transaction_id': lipana_transaction_id,
-                    'data': {
-                        'size': package['size'],
-                        'price': package['price'],
-                        'validity': package['validity']
-                    }
+                    'message': f'Successfully processed {saved_count} records. Failed: {failed_count}',
+                    'saved_count': saved_count
                 })
             else:
-                raise Exception("No transaction ID in response")
+                return jsonify({
+                    'success': False,
+                    'message': 'No valid records found in the image',
+                    'full_text': result.get('full_text', '')[:500] + '...'
+                }), 400
                 
         except Exception as e:
-            logger.error(f"❌ LipaNa STK Push failed: {str(e)}")
-            
-            # Update transaction status to failed
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE transactions 
-                SET status = 'failed', result_description = ?
-                WHERE id = ?
-            ''', (str(e), transaction_db_id))
-            conn.commit()
-            conn.close()
-            
-            return jsonify({
-                'success': False,
-                'message': f'Failed to initiate payment: {str(e)}'
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error initiating payment: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Internal server error: {str(e)}'
-        }), 500
-
-@app.route('/api/payment-callback', methods=['POST'])
-def payment_callback():
-    """Callback endpoint for LipaNa.Dev payment results"""
-    try:
-        data = request.json
-        logger.info(f"💰 Payment callback received: {data}")
-        
-        # Extract callback data - adjust based on actual LipaNa callback format
-        transaction_id = data.get('transactionId') or data.get('id')
-        status = data.get('status', '').lower()
-        mpesa_receipt = data.get('mpesaReceiptNumber') or data.get('receipt')
-        result_desc = data.get('resultDesc') or data.get('message', '')
-        
-        if not transaction_id:
-            logger.error("No transaction ID in callback")
-            return jsonify({'success': False, 'message': 'No transaction ID'}), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Find transaction by lipana_transaction_id
-        cursor.execute('SELECT * FROM transactions WHERE lipana_transaction_id = ?', (transaction_id,))
-        transaction = cursor.fetchone()
-        
-        if not transaction:
-            logger.error(f"Transaction not found for LipaNa ID: {transaction_id}")
-            conn.close()
-            return jsonify({'success': False, 'message': 'Transaction not found'}), 404
-        
-        # Determine status
-        if status in ['success', 'completed', 'paid']:
-            db_status = 'completed'
-            logger.info(f"✅ Payment successful: {transaction['transaction_id']}")
-        else:
-            db_status = 'failed'
-            logger.info(f"❌ Payment failed: {transaction['transaction_id']}")
-        
-        # Update transaction
-        cursor.execute('''
-            UPDATE transactions 
-            SET status = ?, 
-                mpesa_receipt_number = ?,
-                result_description = ?,
-                updated_at = CURRENT_TIMESTAMP,
-                completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END
-            WHERE id = ?
-        ''', (db_status, mpesa_receipt, result_desc, db_status, transaction['id']))
-        
-        conn.commit()
-        conn.close()
-        
-        log_audit('payment_callback', f'Transaction: {transaction["transaction_id"]}, Status: {db_status}')
-        
-        return jsonify({'success': True, 'message': 'Callback processed successfully'})
-        
-    except Exception as e:
-        logger.error(f"Error processing callback: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/check-payment-status', methods=['POST'])
-def check_payment_status():
-    """Check payment status for a transaction"""
-    try:
-        data = request.json
-        transaction_id = data.get('transaction_id')
-        lipana_transaction_id = data.get('lipana_transaction_id')
-        
-        if not transaction_id and not lipana_transaction_id:
-            return jsonify({'success': False, 'message': 'Transaction ID required'}), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if transaction_id:
-            cursor.execute('SELECT * FROM transactions WHERE transaction_id = ?', (transaction_id,))
-        else:
-            cursor.execute('SELECT * FROM transactions WHERE lipana_transaction_id = ?', (lipana_transaction_id,))
-        
-        transaction = cursor.fetchone()
-        
-        if not transaction:
-            conn.close()
-            return jsonify({'success': False, 'message': 'Transaction not found'}), 404
-        
-        cursor.execute('SELECT * FROM packages WHERE id = ?', (transaction['package_id'],))
-        package = cursor.fetchone()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'transaction': {
-                'id': transaction['transaction_id'],
-                'phone': transaction['phone_number'],
-                'recipient': transaction['recipient_number'],
-                'amount': transaction['amount'],
-                'status': transaction['status'],
-                'mpesa_receipt': transaction['mpesa_receipt_number'],
-                'lipana_transaction_id': transaction['lipana_transaction_id'],
-                'created_at': transaction['created_at'],
-                'completed_at': transaction['completed_at']
-            },
-            'package': {
-                'size': package['size'] if package else 'Unknown',
-                'validity': package['validity'] if package else 'Unknown'
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error checking status: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
-
-@app.route('/api/manual-payment', methods=['POST'])
-def manual_payment():
-    """Record manual payment"""
-    try:
-        data = request.json
-        phone = data.get('phone')
-        package_id = data.get('package_id')
-        mpesa_code = data.get('mpesa_code')
-        
-        if not phone or not package_id or not mpesa_code:
-            return jsonify({'success': False, 'message': 'All fields are required'}), 400
-        
-        formatted_phone = validate_phone_number(phone)
-        if not formatted_phone:
-            return jsonify({'success': False, 'message': 'Invalid phone number'}), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM packages WHERE id = ?', (package_id,))
-        package = cursor.fetchone()
-        
-        if not package:
-            conn.close()
-            return jsonify({'success': False, 'message': 'Invalid package'}), 400
-        
-        transaction_id = generate_transaction_id()
-        
-        cursor.execute('''
-            INSERT INTO transactions (
-                transaction_id, phone_number, recipient_number, 
-                package_id, amount, status, mpesa_receipt_number,
-                result_description
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            transaction_id, formatted_phone.replace('+', ''), formatted_phone.replace('+', ''),
-            package_id, package['price'], 'pending_verification',
-            mpesa_code, 'Manual payment - pending verification'
-        ))
-        
-        conn.commit()
-        conn.close()
-        
-        log_audit('manual_payment', f'Transaction: {transaction_id}, M-PESA: {mpesa_code}')
-        
-        return jsonify({
-            'success': True,
-            'message': 'Manual payment recorded. Data will be loaded after verification.',
-            'transaction_id': transaction_id
-        })
-        
-    except Exception as e:
-        logger.error(f"Error recording manual payment: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
-
-@app.route('/api/test-lipana', methods=['GET'])
-def test_lipana():
-    """Test LipaNa API connection using the package"""
-    try:
-        # Test with a minimal STK push (using test phone)
-        test_phone = '+254708374149'  # LipaNa test number
-        
-        # Try to initiate a test STK push with amount 1 KES
-        stk_response = lipana_client.transactions.initiate_stk_push(
-            phone=test_phone,
-            amount=1,
-            account_reference='TEST',
-            transaction_desc='API Test'
-        )
-        
-        return jsonify({
-            'success': True,
-            'message': 'LipaNa package test completed',
-            'response': stk_response,
-            'config': {
-                'environment': app.config['LIPANA_ENVIRONMENT'],
-                'callback_url': app.config['LIPANA_CALLBACK_URL'],
-                'business_shortcode': app.config['BUSINESS_SHORTCODE'],
-                'api_key_configured': bool(app.config['LIPANA_API_KEY'])
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'LipaNa test failed: {str(e)}',
-            'config': {
-                'environment': app.config['LIPANA_ENVIRONMENT'],
-                'callback_url': app.config['LIPANA_CALLBACK_URL']
-            }
-        }), 500
-
-@app.route('/api/create-payment-link', methods=['POST'])
-def create_payment_link():
-    """Create a payment link (alternative to STK push)"""
-    try:
-        data = request.json
-        package_id = data.get('package_id')
-        
-        if not package_id:
-            return jsonify({'success': False, 'message': 'Package ID required'}), 400
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM packages WHERE id = ? AND is_active = 1', (package_id,))
-        package = cursor.fetchone()
-        conn.close()
-        
-        if not package:
-            return jsonify({'success': False, 'message': 'Invalid package'}), 400
-        
-        # Create payment link using LipaNa
-        payment_link = lipana_client.payment_links.create(
-            title=f"Bingwa Data - {package['size']}",
-            amount=int(package['price']),
-            currency='KES'
-        )
-        
-        return jsonify({
-            'success': True,
-            'payment_link': payment_link.get('url'),
-            'data': {
-                'size': package['size'],
-                'price': package['price']
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error creating payment link: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@app.route('/api/debug')
-def debug_info():
-    """Debug endpoint"""
-    db_status = "OK"
-    try:
-        conn = get_db()
-        conn.close()
-    except Exception as e:
-        db_status = f"Error: {str(e)}"
+            return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+        finally:
+            # Clean up uploaded file
+            try:
+                os.remove(filepath)
+            except:
+                pass
     
-    return jsonify({
-        'success': True,
-        'environment': {
-            'on_render': 'RENDER' in os.environ,
-            'render_external_hostname': os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
-            'callback_url': app.config['LIPANA_CALLBACK_URL'],
-            'database_path': app.config['DATABASE_PATH'],
-            'database_status': db_status,
-            'business_shortcode': app.config['BUSINESS_SHORTCODE'],
-            'api_key_configured': bool(app.config['LIPANA_API_KEY']),
-            'api_key_length': len(app.config['LIPANA_API_KEY']) if app.config['LIPANA_API_KEY'] else 0,
-            'lipana_environment': app.config['LIPANA_ENVIRONMENT']
-        },
-        'app': {
-            'name': app.config['BUSINESS_NAME'],
-            'packages_count': len(app.config['DATA_PACKAGES'])
+    return jsonify({'error': 'Invalid file type'}), 400
+
+# ==================== TEMPLATE ====================
+
+# Create template directory if it doesn't exist
+os.makedirs('templates', exist_ok=True)
+
+# Write the HTML template with UTF-8 encoding
+html_content = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rabai Secondary School - Library Management System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-    })
-
-@app.route('/api/stats')
-def get_stats():
-    """Get system statistics"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT COUNT(*) as total FROM transactions')
-    total_transactions = cursor.fetchone()['total']
-    
-    today = datetime.now().strftime('%Y-%m-%d')
-    cursor.execute('SELECT COUNT(*) as today_count FROM transactions WHERE date(created_at) = ?', (today,))
-    today_transactions = cursor.fetchone()['today_count']
-    
-    cursor.execute('SELECT COUNT(*) as successful FROM transactions WHERE status = "completed"')
-    successful_transactions = cursor.fetchone()['successful']
-    
-    cursor.execute('SELECT SUM(amount) as revenue FROM transactions WHERE status = "completed"')
-    revenue_result = cursor.fetchone()['revenue']
-    total_revenue = revenue_result if revenue_result else 0
-    
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'stats': {
-            'total_transactions': total_transactions,
-            'today_transactions': today_transactions,
-            'successful_transactions': successful_transactions,
-            'total_revenue': total_revenue,
-            'business_name': app.config['BUSINESS_NAME']
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
         }
-    })
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header h2 {
+            font-size: 1.5em;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card p {
+            color: #666;
+            font-size: 1.2em;
+        }
+        
+        .upload-section {
+            padding: 40px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .upload-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .upload-container h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            margin: 20px 0;
+        }
+        
+        .file-input {
+            position: absolute;
+            width: 0.1px;
+            height: 0.1px;
+            opacity: 0;
+            overflow: hidden;
+            z-index: -1;
+        }
+        
+        .file-label {
+            display: inline-block;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: transform 0.3s;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .file-label:hover {
+            transform: scale(1.05);
+        }
+        
+        .process-btn {
+            padding: 15px 50px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: transform 0.3s;
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.4);
+            margin-top: 20px;
+        }
+        
+        .process-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .process-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #fileName {
+            margin: 15px 0;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .result-section {
+            padding: 0 40px 40px 40px;
+        }
+        
+        .result-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .result-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .result-header h3 {
+            font-size: 1.5em;
+        }
+        
+        .refresh-btn {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1.1em;
+            color: #666;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 30px;
+            overflow-x: auto;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 500;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            color: #666;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status-message {
+            padding: 15px 30px;
+            margin: 20px 40px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 RABAI SECONDARY SCHOOL</h1>
+            <h2>Library Management System</h2>
+            <p style="margin-top: 10px; opacity: 0.9;">Teacher: Mr. Khalid Ahmad</p>
+        </div>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>{{ total_students }}</h3>
+                <p>Total Students</p>
+            </div>
+            <div class="stat-card">
+                <h3>{{ total_books }}</h3>
+                <p>Total Books</p>
+            </div>
+            <div class="stat-card">
+                <h3>{{ total_issued }}</h3>
+                <p>Books Issued</p>
+            </div>
+        </div>
+        
+        <div class="upload-section">
+            <div class="upload-container">
+                <h3>📸 Upload Student Form</h3>
+                <p style="color: #666; margin-bottom: 20px;">Upload an image of the student book issue form to automatically process ALL records and update the database</p>
+                
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" accept="image/*">
+                    <label for="fileInput" class="file-label">Choose Image</label>
+                </div>
+                
+                <div id="fileName"></div>
+                
+                <button id="processBtn" class="process-btn" onclick="processImage()" disabled>
+                    <span id="btnText">Process with Vision API</span>
+                    <span id="loadingSpinner" class="loading" style="display: none;"></span>
+                </button>
+            </div>
+        </div>
+        
+        <div id="statusMessage" class="status-message"></div>
+        
+        <div class="result-section">
+            <div class="result-container">
+                <div class="result-header">
+                    <h3>📊 Library Records</h3>
+                    <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('students')">Students</button>
+                    <button class="tab" onclick="showTab('books')">Books</button>
+                    <button class="tab" onclick="showTab('issued')">Issued Books</button>
+                </div>
+                
+                <div id="studentsTab" class="tab-content active">
+                    <h3 style="color: #333; margin-bottom: 20px;">Student Records</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ADM No</th>
+                                <th>Name</th>
+                                <th>Stream</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr>
+                                <td>{{ student[1] }}</td>
+                                <td>{{ student[2] }}</td>
+                                <td>{{ student[3] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="booksTab" class="tab-content">
+                    <h3 style="color: #333; margin-bottom: 20px;">Book Records</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Book Name</th>
+                                <th>Book Code</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for book in books %}
+                            <tr>
+                                <td>{{ book[1] }}</td>
+                                <td>{{ book[2] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="issuedTab" class="tab-content">
+                    <h3 style="color: #333; margin-bottom: 20px;">Issued Books</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>ADM No</th>
+                                <th>Book Name</th>
+                                <th>Stream</th>
+                                <th>Date Issued</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for issue in issued %}
+                            <tr>
+                                <td>{{ issue[1] }}</td>
+                                <td>{{ issue[2] }}</td>
+                                <td>{{ issue[3] }}</td>
+                                <td>{{ issue[5] }}</td>
+                                <td>{{ issue[4] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const processBtn = document.getElementById('processBtn');
+        const btnText = document.getElementById('btnText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        fileInput.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                fileName.textContent = `Selected: ${this.files[0].name}`;
+                processBtn.disabled = false;
+            } else {
+                fileName.textContent = '';
+                processBtn.disabled = true;
+            }
+        });
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function showMessage(message, isSuccess) {
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message ' + (isSuccess ? 'status-success' : 'status-error');
+            statusMessage.style.display = 'block';
+            
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
+        }
+        
+        function processImage() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showMessage('Please select an image first', false);
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            processBtn.disabled = true;
+            btnText.style.display = 'none';
+            loadingSpinner.style.display = 'inline-block';
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(`✓ ${data.message}`, true);
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showMessage('✗ ' + (data.message || 'Failed to process image'), false);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('✗ Error processing image. Please try again.', false);
+            })
+            .finally(() => {
+                processBtn.disabled = false;
+                btnText.style.display = 'inline';
+                loadingSpinner.style.display = 'none';
+            });
+        }
+        
+        function refreshData() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
+'''
 
-@app.route('/health')
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'Bingwa Data Sales',
-        'timestamp': datetime.now().isoformat()
-    })
+# Write the HTML template with UTF-8 encoding
+with open('templates/index.html', 'w', encoding='utf-8') as f:
+    f.write(html_content)
+print("✓ HTML template created successfully")
 
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'success': False, 'message': 'Resource not found'}), 404
-
-@app.errorhandler(500)
-def server_error(error):
-    return jsonify({'success': False, 'message': 'Internal server error'}), 500
+# Initialize database when app starts
+with app.app_context():
+    init_database()
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("🚀 BINGWA DATA SALES - LIPANA PACKAGE VERSION")
-    print("=" * 60)
-    print(f"🏪 Business: {app.config['BUSINESS_NAME']}")
-    print(f"💰 Till Number: {app.config['BUSINESS_SHORTCODE']}")
-    print(f"📞 Callback URL: {app.config['LIPANA_CALLBACK_URL']}")
-    print(f"🌐 LipaNa Environment: {app.config['LIPANA_ENVIRONMENT']}")
-    print(f"🔑 API Key: {'✅ Configured' if app.config['LIPANA_API_KEY'] else '❌ Missing'}")
-    print("=" * 60)
-    print("📱 Test your setup: /api/test-lipana")
-    print("🔍 Debug info: /api/debug")
-    print("💳 Create payment link: /api/create-payment-link")
-    print("=" * 60)
+    print("=" * 50)
+    print("Rabai Secondary School - Library Management System")
+    print("=" * 50)
+    print("\n✓ Starting server...")
+    print("✓ Multi-record processing enabled")
+    print("✓ Using Google Vision API with provided API key")
+    print("\n🌐 Access the application at: http://localhost:5000")
+    print("\nPress Ctrl+C to stop the server")
+    print("=" * 50)
     
-    port = int(os.environ.get('PORT', 5000))
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    )
+    app.run(debug=True, host='0.0.0.0', port=5000)
