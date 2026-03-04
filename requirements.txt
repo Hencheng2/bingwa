@@ -4,3 +4,6 @@ requests
 gunicorn
 lipana
 python-dotenv
+google-cloud-vision
+Werkzeug
+Pillow
